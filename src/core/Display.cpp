@@ -1,5 +1,7 @@
 #include "core/Display.h"
 
+#include <string.h>
+
 #include "core/Emoji.h"
 #include "pins.h"
 
@@ -84,18 +86,30 @@ bool fontHasGlyph(uint32_t cp) {
 // se dibuja aparte con su dibujo de core/Emoji.cpp, o con un punto si no lo tiene.
 int walk(int x, int baselineY, const String& s, bool draw) {
   int width = 0;
-  String run;
+  // Tramo de texto normal pendiente de dibujar. Es un búfer fijo para no
+  // reservar memoria en cada letra: esta función se llama muchas veces por fotograma.
+  char run[128];
+  size_t runLength = 0;
 
   // Dibuja el tramo de texto acumulado y deja 1 píxel de separación.
   auto flushRun = [&]() {
-    if (run.length() == 0) {
+    if (runLength == 0) {
       return;
     }
+    run[runLength] = '\0';
     if (draw) {
-      u8g2.drawUTF8(x + width, baselineY, run.c_str());
+      u8g2.drawUTF8(x + width, baselineY, run);
     }
-    width += u8g2.getUTF8Width(run.c_str()) + 1;
-    run = "";
+    width += u8g2.getUTF8Width(run) + 1;
+    runLength = 0;
+  };
+
+  auto addToRun = [&](const char* bytes, size_t n) {
+    if (runLength + n >= sizeof(run)) {
+      flushRun();
+    }
+    memcpy(run + runLength, bytes, n);
+    runLength += n;
   };
 
   auto drawArt = [&](const Emoji::Art* art) {
@@ -159,9 +173,9 @@ int walk(int x, int baselineY, const String& s, bool draw) {
 
     const char* rep = replacement(cp);
     if (rep != nullptr) {
-      run += rep;
+      addToRun(rep, strlen(rep));
     } else if (fontHasGlyph(cp)) {
-      run += s.substring(start - s.c_str(), p - s.c_str());
+      addToRun(start, p - start);
     } else {
       drawDot();
     }
@@ -172,14 +186,6 @@ int walk(int x, int baselineY, const String& s, bool draw) {
   return width > 0 ? width - 1 : 0;
 }
 
-// Quita el último carácter UTF-8 completo.
-void removeLastChar(String& s) {
-  int i = s.length() - 1;
-  while (i > 0 && ((uint8_t)s[i] & 0xC0) == 0x80) {
-    i--;
-  }
-  s.remove(i);
-}
 
 // Parte una palabra demasiado larga en trozos que quepan en maxWidth.
 // El último trozo también se añade; quien llama lo recupera para seguir la línea.
@@ -246,6 +252,9 @@ namespace Display {
 void begin() {
   u8g2.setBusClock(400000);
   u8g2.begin();
+  // Texto transparente: solo se pintan los píxeles de las letras, así se puede
+  // escribir en negro sobre el fondo encendido de una selección.
+  u8g2.setFontMode(1);
   u8g2.setFont(u8g2_font_6x10_tf);
 }
 
@@ -266,11 +275,28 @@ int textWidth(const String& s) {
 }
 
 String fit(const String& s, int maxWidth) {
-  String out = s;
-  while (out.length() > 0 && textWidth(out) > maxWidth) {
-    removeLastChar(out);
+  if (textWidth(s) <= maxWidth) {
+    return s;
   }
-  return out;
+  // Posiciones donde empieza cada carácter: solo se puede cortar ahí.
+  std::vector<int> cuts;
+  const char* base = s.c_str();
+  for (const char* p = base; *p != '\0';) {
+    cuts.push_back(p - base);
+    nextCodepoint(p);
+  }
+  // Búsqueda binaria del corte más largo que cabe.
+  int lo = 0;
+  int hi = (int)cuts.size() - 1;
+  while (lo < hi) {
+    const int mid = (lo + hi + 1) / 2;
+    if (textWidth(s.substring(0, cuts[mid])) <= maxWidth) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return s.substring(0, cuts[lo]);
 }
 
 std::vector<String> wrap(const String& s, int maxWidth) {

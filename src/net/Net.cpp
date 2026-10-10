@@ -16,22 +16,6 @@ bool restartPending = false;
 uint32_t restartAt = 0;
 String (*pageBuilder)() = nullptr;
 
-String htmlEscape(const String& text) {
-  String out;
-  out.reserve(text.length() + 8);
-  for (size_t i = 0; i < text.length(); i++) {
-    char c = text[i];
-    switch (c) {
-      case '&': out += "&amp;"; break;
-      case '<': out += "&lt;"; break;
-      case '>': out += "&gt;"; break;
-      case '"': out += "&quot;"; break;
-      default: out += c;
-    }
-  }
-  return out;
-}
-
 String pageStart() {
   return "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
          "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
@@ -49,7 +33,7 @@ String formHtml() {
       "<form method=\"POST\" action=\"/save\">"
       "<p>Nombre de la wifi (SSID):<br>"
       "<input name=\"ssid\" maxlength=\"32\" required value=\"";
-  html += htmlEscape(savedSsid);
+  html += Net::htmlEscape(savedSsid);
   html +=
       "\"></p>"
       "<p>Contrase&ntilde;a:<br><input name=\"pass\" type=\"password\" maxlength=\"63\"></p>"
@@ -195,6 +179,22 @@ String ip() {
 
 String hostName() {
   return String(MDNS_NAME) + ".local";
+}
+
+String htmlEscape(const String& text) {
+  String out;
+  out.reserve(text.length() + 8);
+  for (size_t i = 0; i < text.length(); i++) {
+    char c = text[i];
+    switch (c) {
+      case '&': out += "&amp;"; break;
+      case '<': out += "&lt;"; break;
+      case '>': out += "&gt;"; break;
+      case '"': out += "&quot;"; break;
+      default: out += c;
+    }
+  }
+  return out;
 }
 
 String wifiSectionHtml() {

@@ -44,6 +44,9 @@ String ip();
 // Nombre en la red local, "carbuddy.local".
 String hostName();
 
+// Escapa &, <, > y " para poder meter un texto dentro del HTML.
+String htmlEscape(const String& text);
+
 // Estado de la Wi-Fi y botón para editarla, en HTML.
 String wifiSectionHtml();
 
