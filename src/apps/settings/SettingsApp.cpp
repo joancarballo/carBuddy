@@ -13,11 +13,11 @@ void SettingsApp::draw() {
   int y = showAp ? 9 : 16;
 
   if (showAp) {
-    String instructions = String("AP: Conectate al wifi llamado ") + Net::AP_SSID + " para configurar.";
+    String instructions = String("Conectate al wifi ") + Net::AP_SSID + " para configurar.";
     int lines = Display::textWrapped(0, y, Display::WIDTH, lineHeight, instructions);
     y += lines * lineHeight;
   }
-
+  
   String wifi = Net::isConnected() ? Net::ssid() : String("No conectada");
   Display::text(0, y, Display::fit("Wifi: " + wifi, Display::WIDTH).c_str());
   y += lineHeight;

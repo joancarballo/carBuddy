@@ -22,8 +22,18 @@ class App {
   // y recibe los eventos en handleInput() hasta que se pulsa BACK.
   virtual bool hasInteraction() const { return false; }
 
+  // Se llaman al entrar en el segundo nivel y al volver al primero,
+  // para que la app pueda reiniciar su selección.
+  virtual void onEnter() {}
+  virtual void onExit() {}
+
   // Eventos de entrada, solo cuando se está dentro de la app (segundo nivel).
-  virtual void handleInput(InputEvent ev) { (void)ev; }
+  // Devuelve true si la app ha usado el evento. BACK solo sale al primer nivel
+  // si la app no lo usa (por ejemplo, para cerrar una vista de detalle).
+  virtual bool handleInput(InputEvent ev) {
+    (void)ev;
+    return false;
+  }
 
   // Sección de la web para esta app, en HTML. Vacío si no tiene.
   virtual String webSection() { return String(); }
