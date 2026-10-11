@@ -2,6 +2,8 @@
 
 #include <ctype.h>
 
+#include <algorithm>
+
 #include "core/Display.h"
 #include "net/Net.h"
 #include "services/TimeService.h"
@@ -23,18 +25,37 @@ const char* const SHORT_DAYS[] = {"Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "S�
 // Cabecera (y = 1..8) y 5 filas de 10 píxeles: 12..21, 22..31, 32..41, 42..51 y 52..61.
 static_assert(LIST_TOP + VISIBLE_ROWS * ROW_HEIGHT <= Display::HEIGHT, "las 5 filas tienen que caber");
 
-// Evento especial: si es hoy, no va en la lista y se indica con 👧 en la
-// cabecera; si es mañana, va el primero de mañana. Basta con que el título
-// contenga el texto, sin distinguir mayúsculas (puede llevar emojis alrededor).
-const char* LAIA_TEXT = "laia en joan";
+// Eventos especiales. Basta con que el título contenga el texto, sin distinguir
+// mayúsculas (puede llevar emojis alrededor).
+//   "Laia en Joan": si es hoy no va en la lista y se indica con 👧 en la
+//                   cabecera; si es mañana va el primero de mañana.
+//   "Laia en Pilar": va el primero de su día (después de "Laia en Joan").
+const char* LAIA_JOAN = "laia en joan";
+const char* LAIA_PILAR = "laia en pilar";
 
-bool isLaiaEvent(const CalendarEvent& e) {
+bool titleContains(const CalendarEvent& e, const char* lowerText) {
   std::string title = e.title;
   for (size_t i = 0; i < title.size(); i++) {
     title[i] = (char)tolower((unsigned char)title[i]);
   }
-  return title.find(LAIA_TEXT) != std::string::npos;
+  return title.find(lowerText) != std::string::npos;
 }
+
+// Posición dentro de su día: 0 y 1 van delante del resto (2), que conserva su orden.
+int dayPriority(const CalendarEvent& e) {
+  if (titleContains(e, LAIA_JOAN)) {
+    return 0;
+  }
+  if (titleContains(e, LAIA_PILAR)) {
+    return 1;
+  }
+  return 2;
+}
+
+// Puntos de la animación de espera: uno encendido cada vez, de izquierda a derecha.
+const int DOT_COUNT = 5;
+const int DOT_SPACING = 8;
+const uint32_t DOT_STEP_MS = 250;
 
 // Mensaje que se muestra mientras todavía no hay ningún evento descargado.
 void addStatusNotices(std::vector<String>& out) {
@@ -46,7 +67,7 @@ void addStatusNotices(std::vector<String>& out) {
       out.push_back(Net::hostName());
       break;
     case CalendarService::State::Waiting:
-      out.push_back("Esperando Wi-Fi y hora...");
+      out.push_back("Esperando Wi-Fi y hora");  // debajo va la animación de puntos
       break;
     case CalendarService::State::Downloading:
     case CalendarService::State::Ok:
@@ -117,6 +138,10 @@ void CalendarApp::buildRows(int64_t today) {
     for (size_t i = 0; i < notices.size(); i++) {
       rows_.push_back(Row{RowType::Notice, -1, notices[i]});
     }
+    // Animación para que se vea que la placa sigue funcionando mientras espera.
+    if (CalendarService::status().state == CalendarService::State::Waiting) {
+      rows_.push_back(Row{RowType::Dots, -1, String()});
+    }
     return;
   }
 
@@ -130,17 +155,16 @@ void CalendarApp::buildRows(int64_t today) {
       if (events_[i].day != today + d) {
         continue;
       }
-      if (isLaiaEvent(events_[i])) {
-        if (d == 0) {
-          laiaToday_ = true;  // hoy no va en la lista: se indica con 👧 en la cabecera
-          continue;
-        }
-        // Mañana va siempre el primero, justo debajo del separador.
-        rows_.insert(rows_.begin() + before, Row{RowType::Event, (int)i, String()});
+      if (d == 0 && titleContains(events_[i], LAIA_JOAN)) {
+        laiaToday_ = true;  // hoy no va en la lista: se indica con 👧 en la cabecera
         continue;
       }
       rows_.push_back(Row{RowType::Event, (int)i, String()});
     }
+    // Los eventos especiales delante; el resto mantiene el orden por hora.
+    std::stable_sort(rows_.begin() + before, rows_.end(), [this](const Row& a, const Row& b) {
+      return dayPriority(events_[a.eventIndex]) < dayPriority(events_[b.eventIndex]);
+    });
     if (rows_.size() == before) {
       rows_.push_back(Row{RowType::Empty, -1, d == 0 ? "Hoy no hay eventos" : "Sin eventos"});
     }
@@ -249,6 +273,20 @@ void CalendarApp::drawRow(int row, int topY, Minutes now) {
   const Row& r = rows_[row];
   const int baseline = topY + 8;
   const int middleY = topY + 5;
+
+  if (r.type == RowType::Dots) {
+    const int active = (millis() / DOT_STEP_MS) % DOT_COUNT;
+    const int firstX = (CONTENT_WIDTH - (DOT_COUNT - 1) * DOT_SPACING) / 2;
+    for (int i = 0; i < DOT_COUNT; i++) {
+      const int x = firstX + i * DOT_SPACING;
+      if (i == active) {
+        g.drawDisc(x, middleY, 2);
+      } else {
+        g.drawPixel(x, middleY);
+      }
+    }
+    return;
+  }
 
   if (r.type == RowType::Separator) {
     // ─── Mañana ───

@@ -36,7 +36,8 @@ class CalendarApp : public App {
 
   // Event: un evento. Empty: "Hoy no hay eventos" o "Sin eventos" (se puede
   // seleccionar). Separator: la línea "Mañana". Notice: avisos de estado.
-  enum class RowType { Event, Empty, Separator, Notice };
+  // Dots: animación de 5 puntos mientras se espera a la Wi-Fi y la hora.
+  enum class RowType { Event, Empty, Separator, Notice, Dots };
 
   struct Row {
     RowType type;
