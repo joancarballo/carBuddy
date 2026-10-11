@@ -12,7 +12,8 @@
 //   CalendarSection.cpp sección "Calendario": calendarios iCal y vista previa
 //
 // Cada sección solo usa los servicios (Net, TimeService, CalendarService),
-// nunca las apps de la pantalla. HTML mínimo, sin CSS ni librerías.
+// nunca las apps de la pantalla. HTML sencillo con un estilo propio dentro de la
+// página (Web.cpp), sin librerías ni recursos externos.
 namespace Web {
 
 // Registra las rutas de todas las secciones y arranca el servidor.
@@ -27,6 +28,10 @@ WebServer& server();
 
 // Escapa &, <, > y " para poder meter un texto dentro del HTML.
 String htmlEscape(const String& text);
+
+// Página completa (con el estilo) con un solo bloque de contenido, para
+// respuestas sueltas como la de guardar la Wi-Fi.
+String page(const String& body);
 
 // Responde a un formulario volviendo a la página principal, en la sección anchor.
 void redirectHome(const char* anchor);

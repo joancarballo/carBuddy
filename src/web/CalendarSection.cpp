@@ -114,7 +114,7 @@ String calendarList(const std::vector<CalendarService::CalendarInfo>& cals) {
             "<input name=\"name\" maxlength=\"24\" required value=\"" + name + "\"> "
             "<button type=\"submit\">Guardar</button></form></details>";
     html += "<form method=\"POST\" action=\"/calendar/delete\" onsubmit=\"return confirm('¿Quitar " + name +
-            "?')\">" + index + "<button type=\"submit\">Quitar</button></form></li>";
+            "?')\">" + index + "<button type=\"submit\" class=\"danger\">Quitar</button></form></li>";
   }
   html += "</ul>";
   return html;

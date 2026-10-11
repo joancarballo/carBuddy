@@ -30,9 +30,7 @@ void handleSave() {
   }
 
   Net::saveWifi(ssid, s.arg("pass"));
-  s.send(200, "text/html",
-         "<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head>"
-         "<body><p>Guardado. La placa se reinicia y se conecta a la nueva wifi.</p></body></html>");
+  s.send(200, "text/html", Web::page("<p>Guardado. La placa se reinicia y se conecta a la nueva wifi.</p>"));
 }
 
 }  // namespace
