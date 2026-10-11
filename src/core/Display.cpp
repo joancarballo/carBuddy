@@ -14,6 +14,11 @@ static U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, PIN_OLED_
 namespace {
 
 const int DOT_RADIUS = 3;  // punto que sustituye a los emojis desconocidos
+
+// Animación de espera: 5 puntos; uno encendido cada vez, de izquierda a derecha.
+const int DOT_COUNT = 5;
+const int DOT_SPACING = 8;
+const uint32_t DOT_STEP_MS = 250;
 const int DOT_WIDTH = DOT_RADIUS * 2 + 1;
 
 // Lee un carácter UTF-8 y avanza p. Los bytes no válidos se devuelven como '?'.
@@ -339,11 +344,39 @@ int textWrapped(int x, int baselineY, int maxWidth, int lineHeight, const String
   return lines.size();
 }
 
-void showMessage(const char* message) {
-  u8g2.clearBuffer();
+void waitingDots(int centerX, int centerY) {
+  const int active = (millis() / DOT_STEP_MS) % DOT_COUNT;
+  const int firstX = centerX - (DOT_COUNT - 1) * DOT_SPACING / 2;
+  for (int i = 0; i < DOT_COUNT; i++) {
+    const int x = firstX + i * DOT_SPACING;
+    if (i == active) {
+      u8g2.drawDisc(x, centerY, 2);
+    } else {
+      u8g2.drawPixel(x, centerY);
+    }
+  }
+}
+
+void message(const String& s, bool animated, int top, int bottom) {
   u8g2.setFont(u8g2_font_6x10_tf);
-  u8g2.drawUTF8(0, 10, "carBuddy");
-  u8g2.drawUTF8(0, 30, message);
+  const int lineHeight = 11;
+  const int dotsHeight = 8;
+  std::vector<String> lines = wrap(s, WIDTH);
+
+  // Bloque de texto (y puntos) centrado en vertical dentro de [top, bottom).
+  const int total = lines.size() * lineHeight + (animated ? dotsHeight : 0);
+  const int startY = top + (bottom - top - total) / 2;
+  for (size_t i = 0; i < lines.size(); i++) {
+    textCentered(startY + 8 + i * lineHeight, lines[i]);
+  }
+  if (animated) {
+    waitingDots(WIDTH / 2, startY + lines.size() * lineHeight + dotsHeight / 2);
+  }
+}
+
+void showMessage(const char* s, bool animated) {
+  u8g2.clearBuffer();
+  message(s, animated);
   u8g2.sendBuffer();
 }
 

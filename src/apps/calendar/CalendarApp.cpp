@@ -52,30 +52,23 @@ int dayPriority(const CalendarEvent& e) {
   return 2;
 }
 
-// Puntos de la animación de espera: uno encendido cada vez, de izquierda a derecha.
-const int DOT_COUNT = 5;
-const int DOT_SPACING = 8;
-const uint32_t DOT_STEP_MS = 250;
-
-// Mensaje que se muestra mientras todavía no hay ningún evento descargado.
-void addStatusNotices(std::vector<String>& out) {
+// Mientras todavía no hay ningún evento descargado, en lugar de la lista va un
+// mensaje centrado. Los de espera llevan la animación de puntos; los errores, no.
+void drawStatusMessage(int top) {
   const CalendarService::Status st = CalendarService::status();
   switch (st.state) {
     case CalendarService::State::NoUrl:
-      out.push_back("Sin calendario.");
-      out.push_back("Pega la URL iCal en la web:");
-      out.push_back(Net::hostName());
+      Display::message("Sin calendario\nAñádelo en la web:\n" + Net::hostName(), false, top);
       break;
     case CalendarService::State::Waiting:
-      out.push_back("Esperando Wi-Fi y hora");  // debajo va la animación de puntos
+      Display::message("Esperando Wi-Fi y hora", true, top);
       break;
     case CalendarService::State::Downloading:
     case CalendarService::State::Ok:
-      out.push_back("Descargando...");
+      Display::message("Descargando", true, top);
       break;
     case CalendarService::State::Error:
-      out.push_back("Error al descargar:");
-      out.push_back(st.error);
+      Display::message("Error al descargar\n" + st.error, false, top);
       break;
   }
 }
@@ -98,7 +91,7 @@ void CalendarApp::refreshData(int64_t today) {
 
   // Fila seleccionada, para volver a seleccionarla en la lista nueva.
   const bool keep = isSelectable(selected_);
-  const RowType keepType = keep ? rows_[selected_].type : RowType::Notice;
+  const RowType keepType = keep ? rows_[selected_].type : RowType::Separator;
   const String keepText = keep ? rows_[selected_].text : String();
   std::string keepTitle;
   Minutes keepStart = 0;
@@ -132,16 +125,8 @@ void CalendarApp::buildRows(int64_t today) {
   rowsDay_ = today;
   laiaToday_ = false;
 
+  // Sin nada descargado todavía no hay filas: se dibuja un mensaje de estado.
   if (events_.empty() && CalendarService::status().lastOk == 0) {
-    std::vector<String> notices;
-    addStatusNotices(notices);
-    for (size_t i = 0; i < notices.size(); i++) {
-      rows_.push_back(Row{RowType::Notice, -1, notices[i]});
-    }
-    // Animación para que se vea que la placa sigue funcionando mientras espera.
-    if (CalendarService::status().state == CalendarService::State::Waiting) {
-      rows_.push_back(Row{RowType::Dots, -1, String()});
-    }
     return;
   }
 
@@ -274,20 +259,6 @@ void CalendarApp::drawRow(int row, int topY, Minutes now) {
   const int baseline = topY + 8;
   const int middleY = topY + 5;
 
-  if (r.type == RowType::Dots) {
-    const int active = (millis() / DOT_STEP_MS) % DOT_COUNT;
-    const int firstX = (CONTENT_WIDTH - (DOT_COUNT - 1) * DOT_SPACING) / 2;
-    for (int i = 0; i < DOT_COUNT; i++) {
-      const int x = firstX + i * DOT_SPACING;
-      if (i == active) {
-        g.drawDisc(x, middleY, 2);
-      } else {
-        g.drawPixel(x, middleY);
-      }
-    }
-    return;
-  }
-
   if (r.type == RowType::Separator) {
     // ─── Mañana ───
     const int w = Display::textWidth(r.text);
@@ -304,7 +275,7 @@ void CalendarApp::drawRow(int row, int topY, Minutes now) {
     g.setDrawColor(0);
   }
 
-  if (r.type == RowType::Notice || r.type == RowType::Empty) {
+  if (r.type == RowType::Empty) {
     Display::text(1, baseline, Display::fit(r.text, CONTENT_WIDTH - 1));
     g.setDrawColor(1);
     return;
@@ -345,9 +316,7 @@ void CalendarApp::draw() {
   struct tm t;
 
   if (!TimeService::now(t)) {
-    g.setFont(u8g2_font_6x10_tf);
-    Display::textCentered(28, "Sin hora");
-    Display::textCentered(42, "Esperando a internet");
+    Display::message("Sin hora\nEsperando a internet", true);
     return;
   }
 
@@ -381,6 +350,10 @@ void CalendarApp::draw() {
   }
 
   drawHeader(t);
+  if (rows_.empty()) {
+    drawStatusMessage(LIST_TOP - 2);
+    return;
+  }
   for (int i = 0; i < VISIBLE_ROWS && top_ + i < (int)rows_.size(); i++) {
     drawRow(top_ + i, LIST_TOP + i * ROW_HEIGHT, now);
   }

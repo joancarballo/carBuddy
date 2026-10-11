@@ -15,6 +15,10 @@ constexpr const char* AP_SSID = "carBuddy-setup";
 // Nombre en la red local: http://carbuddy.local
 constexpr const char* MDNS_NAME = "carbuddy";
 
+// Función que se llama a menudo mientras se espera a la Wi-Fi en begin(),
+// para poder animar la pantalla (begin() no vuelve hasta conectar o rendirse).
+void setWaitCallback(void (*callback)());
+
 // Conecta a la Wi-Fi guardada (hasta 15 s) o crea la red de configuración.
 // Arranca el servidor web.
 void begin();

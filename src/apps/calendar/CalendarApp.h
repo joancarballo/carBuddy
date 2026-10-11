@@ -35,14 +35,13 @@ class CalendarApp : public App {
   static const uint32_t IDLE_TIMEOUT_MS = 30000;
 
   // Event: un evento. Empty: "Hoy no hay eventos" o "Sin eventos" (se puede
-  // seleccionar). Separator: la línea "Mañana". Notice: avisos de estado.
-  // Dots: animación de 5 puntos mientras se espera a la Wi-Fi y la hora.
-  enum class RowType { Event, Empty, Separator, Notice, Dots };
+  // seleccionar). Separator: la línea "Mañana" (no se puede seleccionar).
+  enum class RowType { Event, Empty, Separator };
 
   struct Row {
     RowType type;
     int eventIndex;  // posición en events_ (solo para RowType::Event)
-    String text;     // texto del separador o del aviso
+    String text;     // texto del separador o de la fila "sin eventos"
   };
 
   // Lista

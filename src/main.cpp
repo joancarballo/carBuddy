@@ -18,6 +18,11 @@
 
 static uint32_t lastRender = 0;
 
+// Pantalla de arranque mientras se conecta a la Wi-Fi, con la animación de espera.
+static void showConnecting() {
+  Display::showMessage("Conectando Wi-Fi", true);
+}
+
 void setup() {
   Serial.begin(115200);
   delay(300);
@@ -27,7 +32,8 @@ void setup() {
   Display::begin();
   Input::begin();
 
-  Display::showMessage("Conectando WiFi...");
+  showConnecting();
+  Net::setWaitCallback(showConnecting);
   Net::setPageBuilder(AppManager::webSections);
   Net::begin();
 

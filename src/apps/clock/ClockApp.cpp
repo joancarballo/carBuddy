@@ -12,9 +12,7 @@ void ClockApp::draw() {
   struct tm t;
 
   if (!TimeService::now(t)) {
-    g.setFont(u8g2_font_6x10_tf);
-    Display::textCentered(28, "Sin hora");
-    Display::textCentered(42, "Esperando a internet");
+    Display::message("Sin hora\nEsperando a internet", true);
     return;
   }
 

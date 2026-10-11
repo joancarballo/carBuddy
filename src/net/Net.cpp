@@ -15,6 +15,7 @@ String savedSsid;
 bool restartPending = false;
 uint32_t restartAt = 0;
 String (*pageBuilder)() = nullptr;
+void (*waitCallback)() = nullptr;
 
 String pageStart() {
   return "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
@@ -94,6 +95,10 @@ void handleNotFound() {
 
 namespace Net {
 
+void setWaitCallback(void (*callback)()) {
+  waitCallback = callback;
+}
+
 void begin() {
   prefs.begin("wifi", true);
   savedSsid = prefs.getString("ssid", "");
@@ -108,7 +113,10 @@ void begin() {
     WiFi.begin(savedSsid.c_str(), password.c_str());
     uint32_t start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < CONNECT_TIMEOUT_MS) {
-      delay(250);
+      if (waitCallback != nullptr) {
+        waitCallback();
+      }
+      delay(50);
     }
     connected = (WiFi.status() == WL_CONNECTED);
   } else {

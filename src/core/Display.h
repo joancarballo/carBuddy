@@ -37,7 +37,17 @@ std::vector<String> wrap(const String& s, int maxWidth);
 // Devuelve cuántas líneas ha usado.
 int textWrapped(int x, int baselineY, int maxWidth, int lineHeight, const String& s);
 
-// Pantalla sencilla de arranque con un mensaje.
-void showMessage(const char* message);
+// Animación de espera: 5 puntos que se encienden por turnos, centrados en (centerX, centerY).
+// Se mueve sola con el tiempo, así que basta con redibujarla a menudo.
+void waitingDots(int centerX, int centerY);
+
+// Mensaje de espera o de error centrado en la pantalla (o entre las filas top y
+// bottom), con la fuente 6x10. Se parte en líneas por palabras y respeta los '\n'.
+// Con animated, debajo van los puntos de espera; los errores van sin ellos.
+void message(const String& s, bool animated, int top = 0, int bottom = HEIGHT);
+
+// Borra la pantalla, escribe un mensaje centrado y lo envía (para el arranque,
+// cuando todavía no se dibujan las apps).
+void showMessage(const char* s, bool animated);
 
 }  // namespace Display
