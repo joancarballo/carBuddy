@@ -2,7 +2,7 @@
 
 Dispositivo de escritorio basado en una **ESP32-S3** con pantalla OLED, dial y botones. Un único firmware con varias "apps" (reloj, calendario compatible con iCal o Google Calendar,...) que se configura desde una pequeña web servida por la propia placa. Todo corre en la ESP32-S3, sin servidor ni programa externo.
 
-> **Estado:** en desarrollo. El hardware está montado y el firmware está en su fase inicial.
+> **Estado:** en desarrollo. El hardware está montado y el firmware está en su fase inicial con varias apps ya funcionando.
 
 ## Apps previstas
 
@@ -54,12 +54,12 @@ La configuración de la placa está en `platformio.ini`.
 
 ## Hoja de ruta
 
-- [ ] Prueba de hardware (pantalla, dial y botones)
-- [ ] Servidor HTTP de configuración
-- [ ] App de reloj
-- [ ] App de calendario
+- [x] Prueba de hardware (pantalla, dial y botones)
+- [x] Servidor HTTP de configuración
+- [x] App de reloj
+- [x] App de calendario
 - [ ] Otras apps (Claude Buddy...)
 
 ## Seguridad
 
-Las credenciales (contraseña de la Wi-Fi, contraseña de la web de configuración, URL privada del calendario) no se escriben en el código ni se suben al repositorio: se introducen desde la web de configuración y se guardan en la memoria de la placa.
+Las credenciales (contraseña de la Wi-Fi, contraseña de la web de configuración, URL privada del calendario) no se escriben en el código ni se suben al repositorio: se introducen desde la web de configuración y se guardan en la memoria de la placa. 

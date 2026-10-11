@@ -6,3 +6,9 @@
 .vscode/launch.json
 .vscode/ipch
 compile_commands.json
+
+## AI Context
+CLAUDE.md
+
+## macOS Files
+**/.DS_Store
