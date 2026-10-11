@@ -319,12 +319,18 @@ void CalendarApp::draw() {
 
   g.setFont(u8g2_font_5x8_tf);
 
+  // 30 s sin tocar nada: se cierra el detalle y se quita la selección, así
+  // la lista vuelve a colocarse sola en el siguiente evento.
+  const bool idle = millis() - lastInputMs_ >= IDLE_TIMEOUT_MS;
   if (detailOpen_) {
-    if (millis() - lastInputMs_ < DETAIL_TIMEOUT_MS) {
+    if (!idle) {
       drawDetail();
       return;
     }
-    detailOpen_ = false;  // 30 s sin tocar nada: vuelve a la lista
+    detailOpen_ = false;
+  }
+  if (idle) {
+    selected_ = -1;
   }
 
   // Sin evento seleccionado, la lista se coloca sola en el siguiente evento.

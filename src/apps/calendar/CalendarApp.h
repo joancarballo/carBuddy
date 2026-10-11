@@ -31,7 +31,8 @@ class CalendarApp : public App {
   void registerRoutes() override;
 
  private:
-  static const uint32_t DETAIL_TIMEOUT_MS = 30000;  // el detalle se cierra solo
+  // Tras 30 s sin tocar nada, el detalle se cierra y la selección se quita.
+  static const uint32_t IDLE_TIMEOUT_MS = 30000;
 
   // Event: un evento. Empty: "Hoy no hay eventos" o "Sin eventos" (se puede
   // seleccionar). Separator: la línea "Mañana". Notice: avisos de estado.
