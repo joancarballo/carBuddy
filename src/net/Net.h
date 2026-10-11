@@ -1,9 +1,8 @@
 #pragma once
 
 #include <Arduino.h>
-#include <WebServer.h>
 
-// Conexión Wi-Fi y servidor web.
+// Conexión Wi-Fi. La web de configuración está en web/.
 //
 // Si hay una Wi-Fi guardada y se puede conectar, la placa funciona como cliente.
 // Si no, crea su propia red abierta (AP_SSID) para poder configurarla.
@@ -20,20 +19,13 @@ constexpr const char* MDNS_NAME = "carbuddy";
 void setWaitCallback(void (*callback)());
 
 // Conecta a la Wi-Fi guardada (hasta 15 s) o crea la red de configuración.
-// Arranca el servidor web.
 void begin();
 
-// Atiende las peticiones web y vigila la Wi-Fi. Llamar en cada vuelta del loop().
+// Vigila la Wi-Fi. Llamar en cada vuelta del loop().
 // Si la Wi-Fi guardada no está conectada durante 2 minutos, crea la red de
 // configuración; mientras existe, reintenta la Wi-Fi cada 30 s (si nadie está
 // conectado a esa red) y la apaga en cuanto vuelve.
 void loop();
-
-// Servidor web, para que cada app registre sus propias rutas.
-WebServer& server();
-
-// Función que devuelve el contenido (HTML) de la página principal.
-void setPageBuilder(String (*builder)());
 
 // true si la placa está creando su propia red de configuración.
 bool isApMode();
@@ -55,10 +47,7 @@ String ip();
 // Nombre en la red local, "carbuddy.local".
 String hostName();
 
-// Escapa &, <, > y " para poder meter un texto dentro del HTML.
-String htmlEscape(const String& text);
-
-// Estado de la Wi-Fi y botón para editarla, en HTML.
-String wifiSectionHtml();
+// Guarda una Wi-Fi nueva y reinicia la placa al cabo de un momento para conectarse a ella.
+void saveWifi(const String& ssid, const String& pass);
 
 }  // namespace Net

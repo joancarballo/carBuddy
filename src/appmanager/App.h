@@ -7,6 +7,7 @@
 // Interfaz que cumple cada app. Para añadir una app nueva:
 //   1. Crear su carpeta en src/apps/ con una clase que herede de App.
 //   2. Registrarla en AppManager.cpp.
+//   3. Si necesita web, añadir su sección en src/web/ (ver web/Web.h).
 class App {
  public:
   virtual ~App() {}
@@ -35,9 +36,4 @@ class App {
     return false;
   }
 
-  // Sección de la web para esta app, en HTML. Vacío si no tiene.
-  virtual String webSection() { return String(); }
-
-  // Rutas web propias de la app (se llama una vez al arrancar).
-  virtual void registerRoutes() {}
 };

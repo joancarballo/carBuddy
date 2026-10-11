@@ -2,11 +2,10 @@
 // conseguir la URL iCal de Google, formulario para añadir otro y vista previa
 // de los eventos de hoy y mañana.
 
-#include "apps/calendar/CalendarApp.h"
-
-#include "net/Net.h"
 #include "services/TimeService.h"
 #include "services/calendar/CalendarService.h"
+#include "web/Sections.h"
+#include "web/Web.h"
 
 namespace {
 
@@ -44,7 +43,7 @@ String statusText(const CalendarService::Status& st) {
       return "Última descarga: " + clockText(st.lastOk) + " (" + String(st.eventCount) +
              " eventos entre hoy y mañana).";
     case CalendarService::State::Error:
-      text = "Error al descargar: " + Net::htmlEscape(st.error) + ".";
+      text = "Error al descargar: " + Web::htmlEscape(st.error) + ".";
       break;
   }
   if (st.lastOk != 0) {
@@ -79,9 +78,9 @@ String daysPreview(bool showCalendar) {
       if (!e.allDay) {
         items += String(timeRangeText(e).c_str()) + " ";
       }
-      items += Net::htmlEscape(e.title.c_str());
+      items += Web::htmlEscape(e.title.c_str());
       if (showCalendar) {
-        items += " (" + Net::htmlEscape(e.calendar.c_str()) + ")";
+        items += " (" + Web::htmlEscape(e.calendar.c_str()) + ")";
       }
       items += past ? "</s></li>" : "</li>";
     }
@@ -101,12 +100,12 @@ const char* RELOAD_WHEN_DONE =
 String calendarList(const std::vector<CalendarService::CalendarInfo>& cals) {
   String html = "<p>Calendarios:</p><ul>";
   for (size_t i = 0; i < cals.size(); i++) {
-    const String name = Net::htmlEscape(cals[i].name);
+    const String name = Web::htmlEscape(cals[i].name);
     const String index = "<input type=\"hidden\" name=\"i\" value=\"" + String(i) + "\">";
 
     html += "<li><b>" + name + "</b>: ";
     if (cals[i].error.length() > 0) {
-      html += "error (" + Net::htmlEscape(cals[i].error) + ")";
+      html += "error (" + Web::htmlEscape(cals[i].error) + ")";
     } else {
       html += String(cals[i].eventCount) + " eventos hoy y mañana";
     }
@@ -115,7 +114,7 @@ String calendarList(const std::vector<CalendarService::CalendarInfo>& cals) {
             "<input name=\"name\" maxlength=\"24\" required value=\"" + name + "\"> "
             "<button type=\"submit\">Guardar</button></form></details>";
     html += "<form method=\"POST\" action=\"/calendar/delete\" onsubmit=\"return confirm('¿Quitar " + name +
-            "?')\">" + index + "<button type=\"submit\">Quitar</button></form></li>";
+            "?')\">" + index + "<button type=\"submit\" class=\"danger\">Quitar</button></form></li>";
   }
   html += "</ul>";
   return html;
@@ -123,7 +122,9 @@ String calendarList(const std::vector<CalendarService::CalendarInfo>& cals) {
 
 }  // namespace
 
-String CalendarApp::webSection() {
+namespace CalendarSection {
+
+String html() {
   const CalendarService::Status st = CalendarService::status();
   const std::vector<CalendarService::CalendarInfo> cals = CalendarService::calendars();
   const bool hasCalendars = !cals.empty();
@@ -166,9 +167,9 @@ String CalendarApp::webSection() {
   return html;
 }
 
-void CalendarApp::registerRoutes() {
-  Net::server().on("/calendar/add", HTTP_POST, []() {
-    WebServer& s = Net::server();
+void registerRoutes() {
+  Web::server().on("/calendar/add", HTTP_POST, []() {
+    WebServer& s = Web::server();
     String name = s.arg("name");
     String url = s.arg("url");
     name.trim();
@@ -185,35 +186,33 @@ void CalendarApp::registerRoutes() {
       s.send(400, "text/plain; charset=utf-8", "Ya está el máximo de calendarios");
       return;
     }
-    s.sendHeader("Location", "/#calendario");
-    s.send(303, "text/plain", "");
+    Web::redirectHome("calendario");
   });
 
-  Net::server().on("/calendar/rename", HTTP_POST, []() {
-    String name = Net::server().arg("name");
+  Web::server().on("/calendar/rename", HTTP_POST, []() {
+    String name = Web::server().arg("name");
     name.trim();
     if (name.length() > 0) {
-      CalendarService::renameCalendar(Net::server().arg("i").toInt(), name.substring(0, 24));
+      CalendarService::renameCalendar(Web::server().arg("i").toInt(), name.substring(0, 24));
     }
-    Net::server().sendHeader("Location", "/#calendario");
-    Net::server().send(303, "text/plain", "");
+    Web::redirectHome("calendario");
   });
 
-  Net::server().on("/calendar/delete", HTTP_POST, []() {
-    CalendarService::removeCalendar(Net::server().arg("i").toInt());
-    Net::server().sendHeader("Location", "/#calendario");
-    Net::server().send(303, "text/plain", "");
+  Web::server().on("/calendar/delete", HTTP_POST, []() {
+    CalendarService::removeCalendar(Web::server().arg("i").toInt());
+    Web::redirectHome("calendario");
   });
 
-  Net::server().on("/calendar/refresh", HTTP_POST, []() {
+  Web::server().on("/calendar/refresh", HTTP_POST, []() {
     CalendarService::refreshNow();
-    Net::server().sendHeader("Location", "/#calendario");
-    Net::server().send(303, "text/plain", "");
+    Web::redirectHome("calendario");
   });
 
   // Estado para el script de la página: "nourl", "waiting", "downloading", "ok" o "error".
-  Net::server().on("/calendar/status", HTTP_GET, []() {
+  Web::server().on("/calendar/status", HTTP_GET, []() {
     static const char* const NAMES[] = {"nourl", "waiting", "downloading", "ok", "error"};
-    Net::server().send(200, "text/plain", NAMES[(int)CalendarService::status().state]);
+    Web::server().send(200, "text/plain", NAMES[(int)CalendarService::status().state]);
   });
 }
+
+}  // namespace CalendarSection

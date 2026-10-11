@@ -1,6 +1,6 @@
-#include "app/AppManager.h"
+#include "appmanager/AppManager.h"
 
-#include "app/App.h"
+#include "appmanager/App.h"
 #include "apps/calendar/CalendarApp.h"
 #include "apps/clock/ClockApp.h"
 #include "apps/settings/SettingsApp.h"
@@ -82,10 +82,6 @@ void begin() {
   }
   appCount = 3;
 
-  for (int i = 0; i < appCount; i++) {
-    apps[i]->registerRoutes();
-  }
-
   current = 0;
   inApp = false;
   wasApMode = Net::isApMode();  // al arrancar el orden de las apps ya lo tiene en cuenta
@@ -151,18 +147,6 @@ void render() {
     drawIndicator();
   }
   g.sendBuffer();
-}
-
-String webSections() {
-  String html;
-  for (int i = 0; i < appCount; i++) {
-    String section = apps[i]->webSection();
-    if (section.length() > 0) {
-      html += section;
-      html += "<hr>";
-    }
-  }
-  return html;
 }
 
 }  // namespace AppManager
