@@ -24,6 +24,13 @@ class EventCollector {
   // Aplica las repeticiones modificadas o canceladas y devuelve la lista ordenada.
   std::vector<CalendarEvent> finish();
 
+  // Reglas de repetición que no se entienden (el evento sale solo en su
+  // primera fecha). Se guardan las primeras para el diagnóstico.
+  const std::vector<std::string>& unsupportedRules() const { return unsupportedRules_; }
+
+  // true si se llegó a MAX_EVENTS y se dejaron eventos fuera.
+  bool full() const { return full_; }
+
   // Para usar como callback de IcsParser.
   static void addCallback(const IcsEvent& ev, void* collector);
 
@@ -43,4 +50,6 @@ class EventCollector {
   // Repeticiones que tienen su propio VEVENT con RECURRENCE-ID (movidas,
   // cambiadas o canceladas): la versión generada por la RRULE se descarta.
   std::vector<std::pair<uint32_t, CivilTime::Minutes> > overrides_;
+  std::vector<std::string> unsupportedRules_;
+  bool full_ = false;
 };

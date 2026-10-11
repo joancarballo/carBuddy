@@ -1,5 +1,5 @@
 // Sección "Calendario" de la web: indicaciones para conseguir la URL iCal de
-// Google, formulario para pegarla y vista previa de los eventos de hoy.
+// Google, formulario para pegarla y vista previa de los eventos de hoy y mañana.
 
 #include "apps/calendar/CalendarApp.h"
 
@@ -52,31 +52,37 @@ String statusText(const CalendarService::Status& st) {
   return text;
 }
 
-// Lista de los eventos de hoy. Los que ya han terminado salen tachados, como en la pantalla.
-String todayPreview() {
+// Lista de los eventos de hoy y de mañana, como en la pantalla: los que ya han
+// terminado salen tachados y los de todo el día, sin horas.
+String daysPreview() {
   struct tm t;
   if (!TimeService::now(t)) {
     return String();
   }
   const CivilTime::Minutes now = CivilTime::fromTm(t);
   const int64_t today = CivilTime::dayOf(now);
-
   std::vector<CalendarEvent> list = CalendarService::events();
-  String html = "<p>Eventos de hoy:</p><ul>";
-  int count = 0;
-  for (size_t i = 0; i < list.size(); i++) {
-    const CalendarEvent& e = list[i];
-    if (e.day != today) {
-      continue;
+
+  String html;
+  for (int d = 0; d < 2; d++) {
+    html += d == 0 ? "<p>Eventos de hoy:</p>" : "<p>Eventos de mañana:</p>";
+    String items;
+    for (size_t i = 0; i < list.size(); i++) {
+      const CalendarEvent& e = list[i];
+      if (e.day != today + d) {
+        continue;
+      }
+      const bool past = e.end <= now;
+      items += past ? "<li><s>" : "<li>";
+      if (!e.allDay) {
+        items += String(timeRangeText(e).c_str()) + " ";
+      }
+      items += Net::htmlEscape(e.title.c_str());
+      items += past ? "</s></li>" : "</li>";
     }
-    const bool past = e.end <= now;
-    html += past ? "<li><s>" : "<li>";
-    html += String(timeRangeText(e).c_str()) + " " + Net::htmlEscape(e.title.c_str());
-    html += past ? "</s></li>" : "</li>";
-    count++;
+    html += items.length() > 0 ? "<ul>" + items + "</ul>" : "<ul><li>Sin eventos.</li></ul>";
   }
-  html += "</ul>";
-  return count > 0 ? html : "<p>Hoy no hay eventos.</p>";
+  return html;
 }
 
 // Mientras descarga, la página pregunta el estado cada 2 s y se recarga al terminar.
@@ -97,7 +103,7 @@ String CalendarApp::webSection() {
   html += "<p>" + statusText(st) + "</p>";
 
   if (hasUrl && st.lastOk != 0) {
-    html += todayPreview();
+    html += daysPreview();
   }
   if (hasUrl) {
     html += "<form method=\"POST\" action=\"/calendar/refresh\"><button type=\"submit\">Actualizar ahora</button></form>";

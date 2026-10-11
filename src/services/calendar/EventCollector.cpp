@@ -75,6 +75,9 @@ void EventCollector::add(const IcsEvent& ev) {
     }
     return;
   }
+  if (!ev.rrule.empty() && unsupportedRules_.size() < 5) {
+    unsupportedRules_.push_back(ev.rrule);
+  }
 
   if (overlaps(ev.start, ev.end, from, to)) {
     addOccurrence(ev, ev.start, false, std::string());
@@ -128,6 +131,7 @@ std::vector<CalendarEvent> EventCollector::finish() {
   }
 
   std::sort(list.begin(), list.end(), listOrder);
+  full_ = occurrences_.size() >= MAX_EVENTS;
   occurrences_.clear();
   overrides_.clear();
   return list;

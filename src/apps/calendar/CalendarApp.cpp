@@ -18,6 +18,9 @@ const int ARROW_X = 125;        // centro de las flechas
 
 const char* const SHORT_DAYS[] = {"Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"};
 
+// Cabecera (y = 1..8) y 5 filas de 10 píxeles: 12..21, 22..31, 32..41, 42..51 y 52..61.
+static_assert(LIST_TOP + VISIBLE_ROWS * ROW_HEIGHT <= Display::HEIGHT, "las 5 filas tienen que caber");
+
 // Mensaje que se muestra mientras todavía no hay ningún evento descargado.
 void addStatusNotices(std::vector<String>& out) {
   const CalendarService::Status st = CalendarService::status();
@@ -198,13 +201,10 @@ void CalendarApp::keepSelectionVisible() {
 // ---------------------------------------------------------------------------
 
 void CalendarApp::drawHeader(const struct tm& t) {
-  char date[24];
-  char hour[8];
-  snprintf(date, sizeof(date), "%s %02d/%02d/%02d", SHORT_DAYS[t.tm_wday], t.tm_mday, t.tm_mon + 1,
-           (t.tm_year + 1900) % 100);
-  snprintf(hour, sizeof(hour), "%02d:%02d", t.tm_hour, t.tm_min);
-  Display::text(0, 8, date);
-  Display::text(Display::WIDTH - Display::textWidth(hour), 8, hour);
+  char header[32];
+  snprintf(header, sizeof(header), "%s %02d/%02d/%02d  %02d:%02d", SHORT_DAYS[t.tm_wday], t.tm_mday,
+           t.tm_mon + 1, (t.tm_year + 1900) % 100, t.tm_hour, t.tm_min);
+  Display::textCentered(8, header);
 }
 
 void CalendarApp::drawRow(int row, int topY, Minutes now) {
@@ -237,10 +237,15 @@ void CalendarApp::drawRow(int row, int topY, Minutes now) {
     g.setDrawColor(0);
   }
 
-  const String times = timeRangeText(e).c_str();
-  const int timesX = CONTENT_WIDTH - 1 - Display::textWidth(times);
-  Display::text(1, baseline, Display::fit(e.title.c_str(), timesX - 4));
-  Display::text(timesX, baseline, times);
+  // Los eventos de todo el día solo llevan el título, que ocupa toda la fila.
+  if (e.allDay) {
+    Display::text(1, baseline, Display::fit(e.title.c_str(), CONTENT_WIDTH - 2));
+  } else {
+    const String times = timeRangeText(e).c_str();
+    const int timesX = CONTENT_WIDTH - 1 - Display::textWidth(times);
+    Display::text(1, baseline, Display::fit(e.title.c_str(), timesX - 4));
+    Display::text(timesX, baseline, times);
+  }
 
   // Tachado si ya ha terminado.
   if (e.end <= now) {

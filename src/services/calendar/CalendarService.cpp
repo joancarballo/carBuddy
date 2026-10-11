@@ -49,6 +49,26 @@ void setState(CalendarService::State state, const String& error = String()) {
   unlock();
 }
 
+// Resumen de la descarga en el monitor serie, para comprobar que no falta nada:
+// tamaño, eventos leídos, cada evento de hoy y mañana y las repeticiones no admitidas.
+void logResult(size_t bytes, const IcsParser& parser, const EventCollector& collector,
+               const std::vector<CalendarEvent>& list) {
+  Serial.printf("Calendario: %u bytes, %d eventos en el archivo, %u hoy y mañana\n", (unsigned)bytes,
+                parser.eventsRead(), (unsigned)list.size());
+  for (size_t i = 0; i < list.size(); i++) {
+    int y, m, d;
+    CivilTime::civilFromDays(list[i].day, y, m, d);
+    Serial.printf("  %02d/%02d %s %s\n", d, m, timeRangeText(list[i]).c_str(), list[i].title.c_str());
+  }
+  const std::vector<std::string>& rules = collector.unsupportedRules();
+  for (size_t i = 0; i < rules.size(); i++) {
+    Serial.printf("  Repetición no admitida (solo se usa la primera fecha): %s\n", rules[i].c_str());
+  }
+  if (collector.full()) {
+    Serial.printf("  Lista llena: se han quedado eventos fuera (máximo %u)\n", (unsigned)EventCollector::MAX_EVENTS);
+  }
+}
+
 // Descarga el archivo y lo procesa según llega. Devuelve false y rellena error si falla.
 bool download(const String& address, int64_t today, std::vector<CalendarEvent>& out, String& error) {
   NetworkClientSecure client;
@@ -105,8 +125,7 @@ bool download(const String& address, int64_t today, std::vector<CalendarEvent>& 
 
   parser.finish();
   out = collector.finish();
-  Serial.printf("Calendario: %u bytes descargados, %u eventos hoy y mañana\n", (unsigned)total,
-                (unsigned)out.size());
+  logResult(total, parser, collector, out);
   return true;
 }
 

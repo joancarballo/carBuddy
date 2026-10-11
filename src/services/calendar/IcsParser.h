@@ -19,6 +19,9 @@ class IcsParser {
   // Avisa de que el archivo ha terminado (procesa la última línea).
   void finish();
 
+  // VEVENT leídos en todo el archivo (para el diagnóstico en el monitor serie).
+  int eventsRead() const { return eventsRead_; }
+
  private:
   // Una línea de contenido iCal puede llegar partida en varias ("folding"):
   // las siguientes empiezan por un espacio. Las partes se unen por bytes, antes
@@ -38,6 +41,7 @@ class IcsParser {
   int nestedDepth_ = 0;  // dentro de un VALARM u otro bloque dentro del VEVENT
   IcsEvent event_;
   int64_t durationMinutes_ = -1;  // DURATION, si el evento no trae DTEND
+  int eventsRead_ = 0;
 };
 
 namespace Ics {

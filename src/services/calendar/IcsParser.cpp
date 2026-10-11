@@ -327,6 +327,7 @@ void IcsParser::processLine() {
       nestedDepth_--;
     } else if (value == "VEVENT") {
       inEvent_ = false;
+      eventsRead_++;
       if (event_.start >= 0) {
         if (event_.end < 0) {
           // Sin DTEND: se usa DURATION, o un día entero (todo el día) o nada (con hora).
