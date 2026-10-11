@@ -33,6 +33,17 @@ String htmlEscape(const String& text);
 // respuestas sueltas como la de guardar la Wi-Fi.
 String page(const String& body);
 
+// Ventana emergente con un formulario: título, campos (HTML) y los botones
+// Cancelar (cierra sin guardar y deshace lo escrito) y Guardar (envía a action).
+String dialogForm(const String& id, const String& title, const char* action, const String& fields,
+                  const char* submitLabel = "Guardar");
+
+// Botón que abre la ventana emergente id.
+String openDialogButton(const String& id, const String& label, const char* cssClass = "small");
+
+// Animación de espera de la web: 5 puntos que se encienden por turnos, como en la pantalla.
+String waitingDots();
+
 // Responde a un formulario volviendo a la página principal, en la sección anchor.
 void redirectHome(const char* anchor);
 
