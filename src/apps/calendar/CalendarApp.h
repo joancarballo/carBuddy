@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "app/App.h"
+#include "appmanager/App.h"
 #include "services/calendar/CalendarEvent.h"
 
 // Calendario: eventos de hoy y mañana descargados de Google (ver CalendarService).
@@ -15,10 +15,10 @@
 // los siguientes se mueven por la lista; pulsar el dial abre el detalle del
 // evento y BACK (o 30 s sin tocar nada) vuelve a la lista.
 //
-// El código está repartido en tres archivos:
+// El código está repartido en dos archivos:
 //   CalendarApp.cpp     lista y controles
 //   CalendarDetail.cpp  detalle de un evento
-//   CalendarWeb.cpp     sección "Calendario" de la web
+// Su sección de la web ("Calendario") está en web/CalendarSection.cpp.
 class CalendarApp : public App {
  public:
   const char* name() const override { return "Calendario"; }
@@ -27,8 +27,6 @@ class CalendarApp : public App {
   void onEnter() override;
   void onExit() override;
   bool handleInput(InputEvent ev) override;
-  String webSection() override;
-  void registerRoutes() override;
 
  private:
   // Tras 30 s sin tocar nada, el detalle se cierra y la selección se quita.

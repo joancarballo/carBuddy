@@ -30,7 +30,3 @@ void SettingsApp::draw() {
   String address = Net::isConnected() ? Net::hostName() : (ip.length() > 0 ? ip : String("-"));
   Display::text(0, y, ("URL: " + address).c_str());
 }
-
-String SettingsApp::webSection() {
-  return "<h2>Settings App</h2>" + Net::wifiSectionHtml();
-}
