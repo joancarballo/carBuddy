@@ -13,8 +13,8 @@
 // No depende de Arduino.
 class EventCollector {
  public:
-  // Máximo de elementos en la lista, para no agotar la memoria.
-  static const size_t MAX_EVENTS = 40;
+  // Máximo de elementos de un calendario, para no agotar la memoria.
+  static const size_t MAX_EVENTS = 30;
 
   // Ventana: dayCount días a partir de firstDay (días desde el 1/1/1970).
   EventCollector(int64_t firstDay, int dayCount);

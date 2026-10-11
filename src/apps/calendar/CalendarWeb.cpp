@@ -1,5 +1,6 @@
-// Sección "Calendario" de la web: indicaciones para conseguir la URL iCal de
-// Google, formulario para pegarla y vista previa de los eventos de hoy y mañana.
+// Sección "Calendario" de la web: calendarios guardados, indicaciones para
+// conseguir la URL iCal de Google, formulario para añadir otro y vista previa
+// de los eventos de hoy y mañana.
 
 #include "apps/calendar/CalendarApp.h"
 
@@ -53,8 +54,9 @@ String statusText(const CalendarService::Status& st) {
 }
 
 // Lista de los eventos de hoy y de mañana, como en la pantalla: los que ya han
-// terminado salen tachados y los de todo el día, sin horas.
-String daysPreview() {
+// terminado salen tachados y los de todo el día, sin horas. Con varios
+// calendarios, cada evento lleva entre paréntesis el suyo.
+String daysPreview(bool showCalendar) {
   struct tm t;
   if (!TimeService::now(t)) {
     return String();
@@ -78,6 +80,9 @@ String daysPreview() {
         items += String(timeRangeText(e).c_str()) + " ";
       }
       items += Net::htmlEscape(e.title.c_str());
+      if (showCalendar) {
+        items += " (" + Net::htmlEscape(e.calendar.c_str()) + ")";
+      }
       items += past ? "</s></li>" : "</li>";
     }
     html += items.length() > 0 ? "<ul>" + items + "</ul>" : "<ul><li>Sin eventos.</li></ul>";
@@ -91,40 +96,65 @@ const char* RELOAD_WHEN_DONE =
     ".then(function(r){return r.text()})"
     ".then(function(s){if(s=='ok'||s=='error'){location.reload();}});},2000);</script>";
 
+// Lista de calendarios guardados, con su estado y un botón para quitarlos.
+String calendarList(const std::vector<CalendarService::CalendarInfo>& cals) {
+  String html = "<p>Calendarios:</p><ul>";
+  for (size_t i = 0; i < cals.size(); i++) {
+    const String name = Net::htmlEscape(cals[i].name);
+    html += "<li><form method=\"POST\" action=\"/calendar/delete\" onsubmit=\"return confirm('¿Quitar " + name +
+            "?')\"><input type=\"hidden\" name=\"i\" value=\"" + String(i) + "\"><b>" + name + "</b>: ";
+    if (cals[i].error.length() > 0) {
+      html += "error (" + Net::htmlEscape(cals[i].error) + ")";
+    } else {
+      html += String(cals[i].eventCount) + " eventos hoy y mañana";
+    }
+    html += " <button type=\"submit\">Quitar</button></form></li>";
+  }
+  html += "</ul>";
+  return html;
+}
+
 }  // namespace
 
 String CalendarApp::webSection() {
   const CalendarService::Status st = CalendarService::status();
-  const bool hasUrl = CalendarService::hasUrl();
+  const std::vector<CalendarService::CalendarInfo> cals = CalendarService::calendars();
+  const bool hasCalendars = !cals.empty();
 
   String html;
-  html.reserve(3072);
+  html.reserve(4096);
   html += "<h2 id=\"calendario\">Calendario</h2>";
   html += "<p>" + statusText(st) + "</p>";
 
-  if (hasUrl && st.lastOk != 0) {
-    html += daysPreview();
-  }
-  if (hasUrl) {
+  if (hasCalendars) {
+    html += calendarList(cals);
+    if (st.lastOk != 0) {
+      html += daysPreview(cals.size() > 1);
+    }
     html += "<form method=\"POST\" action=\"/calendar/refresh\"><button type=\"submit\">Actualizar ahora</button></form>";
   }
 
-  // Las indicaciones se ven siempre si aún no hay URL; si ya la hay, plegadas.
-  if (hasUrl) {
-    html += "<details><summary>Cómo conseguir la URL en Google Calendar</summary>";
-    html += HOW_TO;
-    html += "</details>";
+  // Formulario para añadir otro calendario. Las URL guardadas no se muestran nunca: son secretas.
+  if ((int)cals.size() < CalendarService::MAX_CALENDARS) {
+    html += hasCalendars ? "<h3>Añadir otro calendario</h3>" : "<h3>Añadir un calendario</h3>";
+    // Las indicaciones se ven siempre si aún no hay calendarios; si ya los hay, plegadas.
+    if (hasCalendars) {
+      html += "<details><summary>Cómo conseguir la URL en Google Calendar</summary>";
+      html += HOW_TO;
+      html += "</details>";
+    } else {
+      html += HOW_TO;
+    }
+    html +=
+        "<form method=\"POST\" action=\"/calendar/add\">"
+        "<p>Nombre (opcional):<br><input name=\"name\" maxlength=\"24\" placeholder=\"Familia\"></p>"
+        "<p>URL iCal privada:<br><input name=\"url\" type=\"url\" size=\"50\" required "
+        "placeholder=\"https://calendar.google.com/calendar/ical/.../basic.ics\"></p>"
+        "<p><button type=\"submit\">Añadir y descargar</button></p></form>";
   } else {
-    html += HOW_TO;
+    html += "<p>Ya hay " + String(CalendarService::MAX_CALENDARS) +
+            " calendarios, el máximo. Quita uno para añadir otro.</p>";
   }
-
-  // La URL guardada no se muestra nunca: es secreta.
-  html += "<form method=\"POST\" action=\"/calendar/url\"><p>";
-  html += hasUrl ? "Ya hay una URL guardada. Para cambiarla, pega la nueva:" : "URL iCal privada:";
-  html +=
-      "<br><input name=\"url\" type=\"url\" size=\"50\" required "
-      "placeholder=\"https://calendar.google.com/calendar/ical/.../basic.ics\"></p>"
-      "<p><button type=\"submit\">Guardar y descargar</button></p></form>";
 
   if (st.state == CalendarService::State::Downloading || st.state == CalendarService::State::Waiting) {
     html += RELOAD_WHEN_DONE;
@@ -133,9 +163,11 @@ String CalendarApp::webSection() {
 }
 
 void CalendarApp::registerRoutes() {
-  Net::server().on("/calendar/url", HTTP_POST, []() {
+  Net::server().on("/calendar/add", HTTP_POST, []() {
     WebServer& s = Net::server();
+    String name = s.arg("name");
     String url = s.arg("url");
+    name.trim();
     url.trim();
     // Google a veces da la dirección como webcal://, que es lo mismo por HTTPS.
     if (url.startsWith("webcal://")) {
@@ -145,9 +177,18 @@ void CalendarApp::registerRoutes() {
       s.send(400, "text/plain; charset=utf-8", "La URL tiene que empezar por https://");
       return;
     }
-    CalendarService::setUrl(url);
+    if (!CalendarService::addCalendar(name.substring(0, 24), url)) {
+      s.send(400, "text/plain; charset=utf-8", "Ya está el máximo de calendarios");
+      return;
+    }
     s.sendHeader("Location", "/#calendario");
     s.send(303, "text/plain", "");
+  });
+
+  Net::server().on("/calendar/delete", HTTP_POST, []() {
+    CalendarService::removeCalendar(Net::server().arg("i").toInt());
+    Net::server().sendHeader("Location", "/#calendario");
+    Net::server().send(303, "text/plain", "");
   });
 
   Net::server().on("/calendar/refresh", HTTP_POST, []() {

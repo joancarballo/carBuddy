@@ -25,21 +25,6 @@ bool overlaps(Minutes start, Minutes end, Minutes from, Minutes to) {
   return start < to && end > from;
 }
 
-// Orden de la lista: por día; dentro de cada día, primero los de todo el día y
-// después por hora de inicio.
-bool listOrder(const CalendarEvent& a, const CalendarEvent& b) {
-  if (a.day != b.day) {
-    return a.day < b.day;
-  }
-  if (a.allDay != b.allDay) {
-    return a.allDay;
-  }
-  if (a.start != b.start) {
-    return a.start < b.start;
-  }
-  return a.title < b.title;
-}
-
 }  // namespace
 
 EventCollector::EventCollector(int64_t firstDay, int dayCount) : firstDay_(firstDay), dayCount_(dayCount) {}
@@ -96,6 +81,7 @@ void EventCollector::addOccurrence(const IcsEvent& ev, Minutes start, bool fromR
   occ.event.location = ev.location;
   occ.event.notes = ev.description;
   occ.event.repeat = repeat;
+  occ.event.uidHash = occ.uidHash;
   occ.event.allDay = ev.allDay;
   occ.event.start = start;
   occ.event.end = start + (ev.end - ev.start);
@@ -130,7 +116,7 @@ std::vector<CalendarEvent> EventCollector::finish() {
     }
   }
 
-  std::sort(list.begin(), list.end(), listOrder);
+  std::sort(list.begin(), list.end(), eventListOrder);
   full_ = occurrences_.size() >= MAX_EVENTS;
   occurrences_.clear();
   overrides_.clear();

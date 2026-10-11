@@ -1,9 +1,10 @@
-// Detalle de un evento del calendario: título, día y horas, lugar, repetición
-// y notas, en líneas que se recorren girando el dial.
+// Detalle de un evento del calendario: título, día y horas, calendario (si hay
+// varios), lugar, repetición y notas, en líneas que se recorren girando el dial.
 
 #include "apps/calendar/CalendarApp.h"
 
 #include "core/Display.h"
+#include "services/calendar/CalendarService.h"
 
 namespace {
 
@@ -40,6 +41,10 @@ void CalendarApp::openDetail(const CalendarEvent& ev, int64_t today) {
   detailLines_.clear();
   addWrapped(detailLines_, ev.title.c_str());
   addWrapped(detailLines_, whenText(ev, today));
+  // Con varios calendarios se indica de cuál viene.
+  if (CalendarService::calendars().size() > 1 && !ev.calendar.empty()) {
+    addWrapped(detailLines_, String("Calendario: ") + ev.calendar.c_str());
+  }
   if (!ev.location.empty()) {
     addWrapped(detailLines_, String("Lugar: ") + ev.location.c_str());
   }

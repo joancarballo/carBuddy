@@ -6,47 +6,66 @@
 
 #include "services/calendar/CalendarEvent.h"
 
-// Descarga del calendario de Google (URL iCal privada) y lista de eventos de
-// hoy y mañana.
+// Descarga de los calendarios de Google (URL iCal privada de cada uno) y lista
+// conjunta de eventos de hoy y mañana.
 //
+// Se pueden guardar hasta MAX_CALENDARS calendarios, cada uno con un nombre.
 // La descarga va en una tarea aparte (núcleo 0) para que la pantalla no se
 // congele mientras tanto: al arrancar, cada 15 minutos, al cambiar de día y al
-// guardar una URL nueva. La URL se guarda en Preferences (espacio "cal") y nunca
-// se escribe en el monitor serie ni se devuelve a la web.
+// añadir un calendario. Si un calendario falla, se siguen mostrando sus últimos
+// eventos. Las URL se guardan en Preferences (espacio "cal") y nunca se escriben
+// en el monitor serie ni se devuelven a la web.
 namespace CalendarService {
 
+const int MAX_CALENDARS = 5;
+
 enum class State {
-  NoUrl,        // todavía no se ha introducido la URL
+  NoUrl,        // todavía no hay ningún calendario
   Waiting,      // esperando a tener Wi-Fi y hora
   Downloading,
   Ok,
-  Error,
+  Error,        // algún calendario no se pudo descargar
 };
 
 struct Status {
   State state;
-  String error;       // motivo del último error (solo con State::Error)
+  String error;       // motivo del primer error, con el nombre del calendario
   time_t lastOk;      // hora de la última descarga correcta (0 = ninguna)
   size_t eventCount;  // elementos de la lista de hoy y mañana
 };
 
-// Lee la URL guardada y arranca la tarea de descarga. Llamar después de TimeService::begin().
+// Datos de un calendario para la web (sin la URL, que es secreta).
+struct CalendarInfo {
+  String name;
+  String error;  // vacío si la última descarga fue bien
+  size_t eventCount;
+};
+
+// Lee los calendarios guardados y arranca la tarea de descarga.
+// Llamar después de TimeService::begin().
 void begin();
 
-bool hasUrl();
+bool hasCalendars();
 
-// Guarda una URL nueva, borra los eventos del calendario anterior y la descarga ya.
-void setUrl(const String& url);
+// Calendarios guardados, en orden.
+std::vector<CalendarInfo> calendars();
+
+// Añade un calendario y lo descarga ya. Si el nombre está vacío se usa
+// "Calendario N". Devuelve false si ya hay MAX_CALENDARS.
+bool addCalendar(const String& name, const String& url);
+
+// Quita el calendario de esa posición y sus eventos.
+void removeCalendar(int index);
 
 // Pide una descarga lo antes posible.
 void refreshNow();
 
 Status status();
 
-// Copia de la lista de eventos, ordenada por día y hora.
+// Copia de la lista de eventos de todos los calendarios, ordenada por día y hora.
 std::vector<CalendarEvent> events();
 
-// Cambia cada vez que llega una lista nueva, para saber si hay que volver a pedirla.
+// Cambia cada vez que cambia la lista, para saber si hay que volver a pedirla.
 uint32_t version();
 
 }  // namespace CalendarService

@@ -5,6 +5,8 @@
 #include <Preferences.h>
 #include <WiFi.h>
 
+#include <algorithm>
+
 #include "certs.h"
 #include "services/TimeService.h"
 #include "services/calendar/EventCollector.h"
@@ -23,8 +25,18 @@ const int DAYS_SHOWN = 2;                       // hoy y mañana
 SemaphoreHandle_t mutex = nullptr;
 TaskHandle_t taskHandle = nullptr;
 
-String url;
-std::vector<CalendarEvent> eventList;
+const size_t MAX_LIST = 50;  // máximo de elementos en la lista conjunta
+
+struct Calendar {
+  String name;
+  String url;
+  String error;                       // vacío si la última descarga fue bien
+  std::vector<CalendarEvent> events;  // últimos eventos descargados (se conservan si falla)
+};
+
+std::vector<Calendar> calendarList;
+uint32_t configVersion = 0;  // cambia al añadir o quitar un calendario
+std::vector<CalendarEvent> eventList;  // todos los calendarios juntos
 uint32_t listVersion = 0;
 CalendarService::Status currentStatus = {CalendarService::State::NoUrl, "", 0, 0};
 
@@ -32,7 +44,7 @@ CalendarService::Status currentStatus = {CalendarService::State::NoUrl, "", 0, 0
 volatile bool requested = false;  // se escribe desde la web (otro núcleo)
 bool lastFailed = false;
 uint32_t lastAttemptMs = 0;
-int64_t lastDay = -1;  // día de la última descarga correcta
+int64_t lastDay = -1;  // día del último intento de descarga
 
 void lock() {
   xSemaphoreTake(mutex, portMAX_DELAY);
@@ -49,12 +61,96 @@ void setState(CalendarService::State state, const String& error = String()) {
   unlock();
 }
 
+// Junta los eventos de todos los calendarios en una sola lista ordenada.
+// Un evento que está en dos calendarios (por ejemplo, una invitación) sale una vez.
+// Llamar con el mutex cogido.
+void mergeLists() {
+  std::vector<CalendarEvent> all;
+  for (size_t i = 0; i < calendarList.size(); i++) {
+    all.insert(all.end(), calendarList[i].events.begin(), calendarList[i].events.end());
+  }
+  std::sort(all.begin(), all.end(), eventListOrder);
+
+  eventList.clear();
+  for (size_t i = 0; i < all.size() && eventList.size() < MAX_LIST; i++) {
+    bool repeated = false;
+    for (size_t j = 0; j < eventList.size() && !repeated; j++) {
+      repeated = eventList[j].uidHash == all[i].uidHash && eventList[j].start == all[i].start &&
+                 eventList[j].day == all[i].day;
+    }
+    if (!repeated) {
+      eventList.push_back(all[i]);
+    }
+  }
+  listVersion++;
+  currentStatus.eventCount = eventList.size();
+}
+
+// Estado general a partir de los errores de cada calendario. Llamar con el mutex cogido.
+void updateErrorState() {
+  currentStatus.error = "";
+  for (size_t i = 0; i < calendarList.size(); i++) {
+    if (calendarList[i].error.length() > 0) {
+      currentStatus.error = calendarList[i].name + ": " + calendarList[i].error;
+      break;
+    }
+  }
+  if (calendarList.empty()) {
+    currentStatus.state = CalendarService::State::NoUrl;
+  } else {
+    currentStatus.state = currentStatus.error.length() > 0 ? CalendarService::State::Error : CalendarService::State::Ok;
+  }
+}
+
+// Guarda los calendarios en Preferences como url0..url4 y name0..name4.
+// Llamar con el mutex cogido.
+void save() {
+  Preferences prefs;
+  prefs.begin("cal", false);
+  for (int i = 0; i < CalendarService::MAX_CALENDARS; i++) {
+    const String urlKey = "url" + String(i);
+    const String nameKey = "name" + String(i);
+    if (i < (int)calendarList.size()) {
+      prefs.putString(urlKey.c_str(), calendarList[i].url);
+      prefs.putString(nameKey.c_str(), calendarList[i].name);
+    } else {
+      prefs.remove(urlKey.c_str());
+      prefs.remove(nameKey.c_str());
+    }
+  }
+  prefs.end();
+}
+
+void load() {
+  Preferences prefs;
+  prefs.begin("cal", false);
+  // Antes solo había una URL, guardada como "url": pasa a ser el primer calendario.
+  if (prefs.isKey("url")) {
+    if (!prefs.isKey("url0")) {
+      prefs.putString("url0", prefs.getString("url", ""));
+      prefs.putString("name0", "Calendario 1");
+    }
+    prefs.remove("url");
+  }
+  for (int i = 0; i < CalendarService::MAX_CALENDARS; i++) {
+    const String url = prefs.getString(("url" + String(i)).c_str(), "");
+    if (url.length() == 0) {
+      break;
+    }
+    Calendar cal;
+    cal.url = url;
+    cal.name = prefs.getString(("name" + String(i)).c_str(), "Calendario " + String(i + 1));
+    calendarList.push_back(cal);
+  }
+  prefs.end();
+}
+
 // Resumen de la descarga en el monitor serie, para comprobar que no falta nada:
 // tamaño, eventos leídos, cada evento de hoy y mañana y las repeticiones no admitidas.
-void logResult(size_t bytes, const IcsParser& parser, const EventCollector& collector,
+void logResult(const String& name, size_t bytes, const IcsParser& parser, const EventCollector& collector,
                const std::vector<CalendarEvent>& list) {
-  Serial.printf("Calendario: %u bytes, %d eventos en el archivo, %u hoy y mañana\n", (unsigned)bytes,
-                parser.eventsRead(), (unsigned)list.size());
+  Serial.printf("Calendario \"%s\": %u bytes, %d eventos en el archivo, %u hoy y mañana\n", name.c_str(),
+                (unsigned)bytes, parser.eventsRead(), (unsigned)list.size());
   for (size_t i = 0; i < list.size(); i++) {
     int y, m, d;
     CivilTime::civilFromDays(list[i].day, y, m, d);
@@ -70,7 +166,8 @@ void logResult(size_t bytes, const IcsParser& parser, const EventCollector& coll
 }
 
 // Descarga el archivo y lo procesa según llega. Devuelve false y rellena error si falla.
-bool download(const String& address, int64_t today, std::vector<CalendarEvent>& out, String& error) {
+bool download(const String& name, const String& address, int64_t today, std::vector<CalendarEvent>& out,
+              String& error) {
   NetworkClientSecure client;
   client.setCACert(GOOGLE_ROOT_CAS);
 
@@ -125,18 +222,21 @@ bool download(const String& address, int64_t today, std::vector<CalendarEvent>& 
 
   parser.finish();
   out = collector.finish();
-  logResult(total, parser, collector, out);
+  for (size_t i = 0; i < out.size(); i++) {
+    out[i].calendar = name.c_str();
+  }
+  logResult(name, total, parser, collector, out);
   return true;
 }
 
-// Decide si toca descargar: hay URL, Wi-Fi y hora, y se ha pedido, ha pasado
-// el tiempo de refresco o ha cambiado el día.
-bool shouldDownload(int64_t today, String& address) {
+// Decide si toca descargar: hay calendarios, Wi-Fi y hora, y se ha pedido,
+// ha pasado el tiempo de refresco o ha cambiado el día.
+bool shouldDownload(int64_t today) {
   lock();
-  address = url;
+  const bool empty = calendarList.empty();
   unlock();
 
-  if (address.length() == 0) {
+  if (empty) {
     setState(CalendarService::State::NoUrl);
     return false;
   }
@@ -157,37 +257,63 @@ void task(void*) {
 
     struct tm now;
     const int64_t today = TimeService::now(now) ? CivilTime::dayOf(CivilTime::fromTm(now)) : -1;
-    String address;
-    if (!shouldDownload(today, address)) {
+    if (!shouldDownload(today)) {
       continue;
     }
 
-    requested = false;
-    lastAttemptMs = millis();
-    setState(CalendarService::State::Downloading);
-
-    std::vector<CalendarEvent> list;
-    String error;
-    const bool ok = download(address, today, list, error);
-    lastFailed = !ok;
-
+    // Copia de los calendarios: la descarga es larga y no se puede tener el mutex cogido.
     lock();
-    // Si mientras tanto se cambió la URL, este resultado ya no sirve.
-    const bool stale = (address != url);
-    if (ok && !stale) {
-      eventList.swap(list);
-      listVersion++;
-      currentStatus.lastOk = time(nullptr);
-      currentStatus.eventCount = eventList.size();
-      lastDay = today;
+    const uint32_t startVersion = configVersion;
+    std::vector<String> names;
+    std::vector<String> urls;
+    for (size_t i = 0; i < calendarList.size(); i++) {
+      names.push_back(calendarList[i].name);
+      urls.push_back(calendarList[i].url);
     }
-    currentStatus.state = ok ? CalendarService::State::Ok : CalendarService::State::Error;
-    currentStatus.error = ok ? String() : error;
     unlock();
 
-    if (!ok) {
-      Serial.printf("Calendario: error al descargar (%s)\n", error.c_str());
+    requested = false;
+    lastAttemptMs = millis();
+    lastDay = today;
+    setState(CalendarService::State::Downloading);
+
+    // Uno detrás de otro: dos conexiones HTTPS a la vez gastarían demasiada memoria.
+    std::vector<std::vector<CalendarEvent> > lists(urls.size());
+    std::vector<String> errors(urls.size());
+    std::vector<bool> ok(urls.size());
+    bool anyOk = false;
+    bool anyFailed = false;
+    for (size_t i = 0; i < urls.size(); i++) {
+      ok[i] = download(names[i], urls[i], today, lists[i], errors[i]);
+      anyOk = anyOk || ok[i];
+      anyFailed = anyFailed || !ok[i];
+      if (!ok[i]) {
+        Serial.printf("Calendario \"%s\": error al descargar (%s)\n", names[i].c_str(), errors[i].c_str());
+      }
     }
+    lastFailed = anyFailed;
+
+    lock();
+    if (configVersion != startVersion) {
+      // Se añadió o quitó un calendario durante la descarga: se repite.
+      requested = true;
+      xTaskNotifyGive(taskHandle);
+    } else {
+      for (size_t i = 0; i < calendarList.size(); i++) {
+        if (ok[i]) {
+          calendarList[i].events.swap(lists[i]);
+          calendarList[i].error = "";
+        } else {
+          calendarList[i].error = errors[i];  // se conservan sus eventos anteriores
+        }
+      }
+      mergeLists();
+      if (anyOk) {
+        currentStatus.lastOk = time(nullptr);
+      }
+      updateErrorState();
+    }
+    unlock();
   }
 }
 
@@ -197,43 +323,69 @@ namespace CalendarService {
 
 void begin() {
   mutex = xSemaphoreCreateMutex();
-
-  Preferences prefs;
-  prefs.begin("cal", true);
-  url = prefs.getString("url", "");
-  prefs.end();
-  currentStatus.state = url.length() > 0 ? State::Waiting : State::NoUrl;
+  load();
+  currentStatus.state = calendarList.empty() ? State::NoUrl : State::Waiting;
 
   // Núcleo 0: el loop() de Arduino (pantalla y web) va en el núcleo 1.
   // La pila es grande porque la conexión HTTPS la necesita.
   xTaskCreatePinnedToCore(task, "calendar", 16384, nullptr, 1, &taskHandle, 0);
 }
 
-bool hasUrl() {
+bool hasCalendars() {
   lock();
-  const bool has = url.length() > 0;
+  const bool has = !calendarList.empty();
   unlock();
   return has;
 }
 
-void setUrl(const String& newUrl) {
-  Preferences prefs;
-  prefs.begin("cal", false);
-  prefs.putString("url", newUrl);
-  prefs.end();
-
+std::vector<CalendarInfo> calendars() {
+  std::vector<CalendarInfo> out;
   lock();
-  url = newUrl;
-  eventList.clear();
-  listVersion++;
-  currentStatus.lastOk = 0;
-  currentStatus.eventCount = 0;
-  currentStatus.state = newUrl.length() > 0 ? State::Waiting : State::NoUrl;
-  currentStatus.error = "";
+  for (size_t i = 0; i < calendarList.size(); i++) {
+    CalendarInfo info;
+    info.name = calendarList[i].name;
+    info.error = calendarList[i].error;
+    info.eventCount = calendarList[i].events.size();
+    out.push_back(info);
+  }
+  unlock();
+  return out;
+}
+
+bool addCalendar(const String& name, const String& url) {
+  lock();
+  if ((int)calendarList.size() >= MAX_CALENDARS) {
+    unlock();
+    return false;
+  }
+  Calendar cal;
+  cal.name = name.length() > 0 ? name : "Calendario " + String(calendarList.size() + 1);
+  cal.url = url;
+  calendarList.push_back(cal);
+  configVersion++;
+  save();
+  currentStatus.state = State::Waiting;
   unlock();
 
-  Serial.println("Calendario: URL guardada");
+  Serial.printf("Calendario \"%s\" añadido\n", cal.name.c_str());
   refreshNow();
+  return true;
+}
+
+void removeCalendar(int index) {
+  lock();
+  if (index >= 0 && index < (int)calendarList.size()) {
+    Serial.printf("Calendario \"%s\" quitado\n", calendarList[index].name.c_str());
+    calendarList.erase(calendarList.begin() + index);
+    configVersion++;
+    save();
+    mergeLists();
+    updateErrorState();
+    if (calendarList.empty()) {
+      currentStatus.lastOk = 0;
+    }
+  }
+  unlock();
 }
 
 void refreshNow() {
