@@ -23,7 +23,10 @@ void setWaitCallback(void (*callback)());
 // Arranca el servidor web.
 void begin();
 
-// Atiende las peticiones web. Llamar en cada vuelta del loop().
+// Atiende las peticiones web y vigila la Wi-Fi. Llamar en cada vuelta del loop().
+// Si la Wi-Fi guardada no está conectada durante 2 minutos, crea la red de
+// configuración; mientras existe, reintenta la Wi-Fi cada 30 s (si nadie está
+// conectado a esa red) y la apaga en cuanto vuelve.
 void loop();
 
 // Servidor web, para que cada app registre sus propias rutas.

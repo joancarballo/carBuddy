@@ -23,6 +23,27 @@ int current = 0;
 bool inApp = false;           // true en el segundo nivel
 uint32_t lastRotationMs = 0;  // última vez que se giró el dial
 uint32_t levelLineMs = 0;     // al entrar en el segundo nivel o girar dentro de él
+bool wasApMode = false;       // para saber cuándo se crea la red de configuración
+
+// Si la placa acaba de crear la red de configuración (por ejemplo, tras 2 minutos
+// sin Wi-Fi), se muestra Configuración, que explica cómo conectarse a ella.
+void showSettingsOnApMode() {
+  const bool apMode = Net::isApMode();
+  if (apMode && !wasApMode) {
+    if (inApp) {
+      apps[current]->onExit();
+      inApp = false;
+    }
+    for (int i = 0; i < appCount; i++) {
+      if (apps[i] == &settingsApp) {
+        current = i;
+      }
+    }
+    lastRotationMs = millis();  // que se vea el indicador
+    Serial.printf("App: %s (modo configuracion)\n", apps[current]->name());
+  }
+  wasApMode = apMode;
+}
 
 // Primera línea de píxeles dividida en tantos bloques como apps; se ilumina el de la app actual.
 void drawIndicator() {
@@ -55,6 +76,7 @@ void begin() {
 
   current = 0;
   inApp = false;
+  wasApMode = Net::isApMode();  // al arrancar el orden de las apps ya lo tiene en cuenta
   lastRotationMs = millis();  // el indicador se ve los primeros 3 s
   Serial.printf("App inicial: %s\n", apps[current]->name());
 }
@@ -100,6 +122,8 @@ void handleInput(InputEvent ev) {
 }
 
 void render() {
+  showSettingsOnApMode();
+
   U8G2& g = Display::gfx();
   g.clearBuffer();
   apps[current]->draw();

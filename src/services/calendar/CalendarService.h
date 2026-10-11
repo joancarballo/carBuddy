@@ -54,6 +54,9 @@ std::vector<CalendarInfo> calendars();
 // "Calendario N". Devuelve false si ya hay MAX_CALENDARS.
 bool addCalendar(const String& name, const String& url);
 
+// Cambia el nombre del calendario de esa posición.
+void renameCalendar(int index, const String& name);
+
 // Quita el calendario de esa posición y sus eventos.
 void removeCalendar(int index);
 

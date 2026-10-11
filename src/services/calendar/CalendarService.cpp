@@ -303,6 +303,10 @@ void task(void*) {
         if (ok[i]) {
           calendarList[i].events.swap(lists[i]);
           calendarList[i].error = "";
+          // Por si se cambió el nombre durante la descarga.
+          for (size_t j = 0; j < calendarList[i].events.size(); j++) {
+            calendarList[i].events[j].calendar = calendarList[i].name.c_str();
+          }
         } else {
           calendarList[i].error = errors[i];  // se conservan sus eventos anteriores
         }
@@ -370,6 +374,23 @@ bool addCalendar(const String& name, const String& url) {
   Serial.printf("Calendario \"%s\" añadido\n", cal.name.c_str());
   refreshNow();
   return true;
+}
+
+void renameCalendar(int index, const String& name) {
+  lock();
+  if (index >= 0 && index < (int)calendarList.size()) {
+    Calendar& cal = calendarList[index];
+    Serial.printf("Calendario \"%s\" ahora se llama \"%s\"\n", cal.name.c_str(), name.c_str());
+    cal.name = name;
+    // Los eventos ya descargados llevan el nombre del calendario: se actualiza también.
+    for (size_t i = 0; i < cal.events.size(); i++) {
+      cal.events[i].calendar = name.c_str();
+    }
+    save();
+    mergeLists();
+    updateErrorState();
+  }
+  unlock();
 }
 
 void removeCalendar(int index) {

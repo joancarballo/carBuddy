@@ -96,19 +96,26 @@ const char* RELOAD_WHEN_DONE =
     ".then(function(r){return r.text()})"
     ".then(function(s){if(s=='ok'||s=='error'){location.reload();}});},2000);</script>";
 
-// Lista de calendarios guardados, con su estado y un botón para quitarlos.
+// Lista de calendarios guardados, con su estado, un desplegable para cambiar
+// el nombre y un botón para quitarlos.
 String calendarList(const std::vector<CalendarService::CalendarInfo>& cals) {
   String html = "<p>Calendarios:</p><ul>";
   for (size_t i = 0; i < cals.size(); i++) {
     const String name = Net::htmlEscape(cals[i].name);
-    html += "<li><form method=\"POST\" action=\"/calendar/delete\" onsubmit=\"return confirm('¿Quitar " + name +
-            "?')\"><input type=\"hidden\" name=\"i\" value=\"" + String(i) + "\"><b>" + name + "</b>: ";
+    const String index = "<input type=\"hidden\" name=\"i\" value=\"" + String(i) + "\">";
+
+    html += "<li><b>" + name + "</b>: ";
     if (cals[i].error.length() > 0) {
       html += "error (" + Net::htmlEscape(cals[i].error) + ")";
     } else {
       html += String(cals[i].eventCount) + " eventos hoy y mañana";
     }
-    html += " <button type=\"submit\">Quitar</button></form></li>";
+    html += "<details><summary>Editar nombre</summary>"
+            "<form method=\"POST\" action=\"/calendar/rename\">" + index +
+            "<input name=\"name\" maxlength=\"24\" required value=\"" + name + "\"> "
+            "<button type=\"submit\">Guardar</button></form></details>";
+    html += "<form method=\"POST\" action=\"/calendar/delete\" onsubmit=\"return confirm('¿Quitar " + name +
+            "?')\">" + index + "<button type=\"submit\">Quitar</button></form></li>";
   }
   html += "</ul>";
   return html;
@@ -134,23 +141,20 @@ String CalendarApp::webSection() {
     html += "<form method=\"POST\" action=\"/calendar/refresh\"><button type=\"submit\">Actualizar ahora</button></form>";
   }
 
-  // Formulario para añadir otro calendario. Las URL guardadas no se muestran nunca: son secretas.
+  // Desplegable para añadir un calendario: formulario e indicaciones. Sin
+  // ningún calendario va abierto. Las URL guardadas no se muestran nunca: son secretas.
   if ((int)cals.size() < CalendarService::MAX_CALENDARS) {
-    html += hasCalendars ? "<h3>Añadir otro calendario</h3>" : "<h3>Añadir un calendario</h3>";
-    // Las indicaciones se ven siempre si aún no hay calendarios; si ya los hay, plegadas.
-    if (hasCalendars) {
-      html += "<details><summary>Cómo conseguir la URL en Google Calendar</summary>";
-      html += HOW_TO;
-      html += "</details>";
-    } else {
-      html += HOW_TO;
-    }
+    html += hasCalendars ? "<details><summary>Añadir otro calendario</summary>"
+                         : "<details open><summary>Añadir un calendario</summary>";
     html +=
         "<form method=\"POST\" action=\"/calendar/add\">"
         "<p>Nombre (opcional):<br><input name=\"name\" maxlength=\"24\" placeholder=\"Familia\"></p>"
         "<p>URL iCal privada:<br><input name=\"url\" type=\"url\" size=\"50\" required "
         "placeholder=\"https://calendar.google.com/calendar/ical/.../basic.ics\"></p>"
         "<p><button type=\"submit\">Añadir y descargar</button></p></form>";
+    html += "<p>Cómo conseguir la URL en Google Calendar:</p>";
+    html += HOW_TO;
+    html += "</details>";
   } else {
     html += "<p>Ya hay " + String(CalendarService::MAX_CALENDARS) +
             " calendarios, el máximo. Quita uno para añadir otro.</p>";
@@ -183,6 +187,16 @@ void CalendarApp::registerRoutes() {
     }
     s.sendHeader("Location", "/#calendario");
     s.send(303, "text/plain", "");
+  });
+
+  Net::server().on("/calendar/rename", HTTP_POST, []() {
+    String name = Net::server().arg("name");
+    name.trim();
+    if (name.length() > 0) {
+      CalendarService::renameCalendar(Net::server().arg("i").toInt(), name.substring(0, 24));
+    }
+    Net::server().sendHeader("Location", "/#calendario");
+    Net::server().send(303, "text/plain", "");
   });
 
   Net::server().on("/calendar/delete", HTTP_POST, []() {
