@@ -17,7 +17,7 @@ void SettingsApp::draw() {
     int lines = Display::textWrapped(0, y, Display::WIDTH, lineHeight, instructions);
     y += lines * lineHeight;
   }
-  
+
   String wifi = Net::isConnected() ? Net::ssid() : String("No conectada");
   Display::text(0, y, Display::fit("Wifi: " + wifi, Display::WIDTH).c_str());
   y += lineHeight;
@@ -28,7 +28,7 @@ void SettingsApp::draw() {
 
   // Conectada se puede usar el nombre local; en modo configuración, la IP.
   String address = Net::isConnected() ? Net::hostName() : (ip.length() > 0 ? ip : String("-"));
-  Display::text(0, y, ("URL/IP: " + address).c_str());
+  Display::text(0, y, ("URL: " + address).c_str());
 }
 
 String SettingsApp::webSection() {

@@ -224,6 +224,10 @@ bool isConnected() {
   return !apMode && WiFi.status() == WL_CONNECTED;
 }
 
+bool isReconnecting() {
+  return savedSsid.length() > 0 && !apMode && WiFi.status() != WL_CONNECTED;
+}
+
 String ssid() {
   return savedSsid;
 }

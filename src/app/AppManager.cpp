@@ -12,6 +12,8 @@ namespace {
 constexpr int MAX_APPS = 8;
 constexpr uint32_t INDICATOR_MS = 3000;
 constexpr uint32_t LEVEL_LINE_MS = 10000;  // fila 0 encendida al estar dentro de una app
+constexpr int RECONNECT_BAR_WIDTH = 16;    // barra que recorre la fila 0 sin Wi-Fi
+constexpr uint32_t RECONNECT_STEP_MS = 10; // 1 píxel cada 10 ms
 
 ClockApp clockApp;
 CalendarApp calendarApp;
@@ -43,6 +45,16 @@ void showSettingsOnApMode() {
     Serial.printf("App: %s (modo configuracion)\n", apps[current]->name());
   }
   wasApMode = apMode;
+}
+
+// Sin Wi-Fi (los 2 minutos antes de crear la red de configuración): una barra
+// recorre la fila 0 de izquierda a derecha y vuelta, para que se vea que la placa
+// está intentando reconectar.
+void drawReconnectBar() {
+  const int travel = Display::WIDTH - RECONNECT_BAR_WIDTH;
+  const int t = (millis() / RECONNECT_STEP_MS) % (2 * travel);
+  const int x = t < travel ? t : 2 * travel - t;
+  Display::gfx().drawHLine(x, 0, RECONNECT_BAR_WIDTH);
 }
 
 // Primera línea de píxeles dividida en tantos bloques como apps; se ilumina el de la app actual.
@@ -127,10 +139,12 @@ void render() {
   U8G2& g = Display::gfx();
   g.clearBuffer();
   apps[current]->draw();
-  if (inApp) {
+  g.setDrawColor(1);
+  if (Net::isReconnecting()) {
+    drawReconnectBar();  // tiene prioridad sobre el indicador y la línea del nivel 2
+  } else if (inApp) {
     // Dentro de una app, la fila 0 entera encendida indica el segundo nivel.
     if (millis() - levelLineMs < LEVEL_LINE_MS) {
-      g.setDrawColor(1);
       g.drawHLine(0, 0, Display::WIDTH);
     }
   } else if (millis() - lastRotationMs < INDICATOR_MS) {

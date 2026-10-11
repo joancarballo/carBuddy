@@ -41,6 +41,10 @@ bool isApMode();
 // true si está conectada como cliente a una Wi-Fi.
 bool isConnected();
 
+// true si se ha perdido la Wi-Fi guardada y la placa está intentando recuperarla
+// durante los 2 minutos previos a crear la red de configuración.
+bool isReconnecting();
+
 // Nombre de la Wi-Fi guardada ("" si no hay ninguna).
 String ssid();
 
