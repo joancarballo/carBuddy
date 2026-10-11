@@ -1,5 +1,5 @@
-// Sección "Settings App" de la web: estado de la Wi-Fi y desplegable "Editar"
-// con el formulario para cambiarla. Guardar reinicia la placa.
+// Sección "Settings App" de la web: estado de la Wi-Fi y botón "Editar", que
+// abre una ventana con el formulario para cambiarla. Guardar reinicia la placa.
 
 #include "net/Net.h"
 #include "web/Sections.h"
@@ -7,17 +7,14 @@
 
 namespace {
 
-// Formulario de la Wi-Fi. El nombre de la red guardada aparece rellenado;
+// Campos de la Wi-Fi. El nombre de la red guardada aparece rellenado;
 // la contraseña nunca se muestra.
-String formHtml() {
-  return "<form method=\"POST\" action=\"/save\">"
-         "<p>Nombre de la wifi (SSID):<br>"
+String fields() {
+  return "<p>Nombre de la wifi (SSID):<br>"
          "<input name=\"ssid\" maxlength=\"32\" required value=\"" +
          Web::htmlEscape(Net::ssid()) +
          "\"></p>"
-         "<p>Contrase&ntilde;a:<br><input name=\"pass\" type=\"password\" maxlength=\"63\"></p>"
-         "<p><button type=\"submit\">Guardar y reiniciar</button></p>"
-         "</form>";
+         "<p>Contrase&ntilde;a:<br><input name=\"pass\" type=\"password\" maxlength=\"63\"></p>";
 }
 
 void handleSave() {
@@ -44,7 +41,8 @@ String html() {
   if (ssid.length() == 0) {
     // Todavía no hay nada guardado: se muestra el formulario directamente.
     html += "<p>No hay ninguna wifi guardada.</p>";
-    html += formHtml();
+    html += "<form method=\"POST\" action=\"/save\">" + fields() +
+            "<div class=\"actions\"><button type=\"submit\">Guardar y reiniciar</button></div></form>";
     return html;
   }
 
@@ -60,10 +58,9 @@ String html() {
             "crea la red " + String(Net::AP_SSID) + " para configurarla.</p>";
   }
 
-  // El formulario se despliega en la misma página.
-  html += "<details><summary>Editar</summary>";
-  html += formHtml();
-  html += "</details>";
+  // El formulario se abre en una ventana, como los del calendario.
+  html += Web::openDialogButton("wifi-edit", "Editar");
+  html += Web::dialogForm("wifi-edit", "Editar Wi-Fi", "/save", fields(), "Guardar y reiniciar");
   return html;
 }
 

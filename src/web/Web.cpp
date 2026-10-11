@@ -32,10 +32,6 @@ const char* STYLE =
     "border:0;border-radius:999px;cursor:pointer}"
     "button:hover{filter:brightness(.95)}"
     "button.danger{color:var(--rose-ink);background:var(--rose)}"
-    "details{margin:12px 0}"
-    "summary{display:inline-block;padding:6px 14px;font-weight:600;color:var(--mint-ink);"
-    "background:var(--mint-soft);border-radius:999px;cursor:pointer}"
-    "details[open]>summary{margin-bottom:10px}"
     "s{color:var(--muted)}a{color:var(--mint-ink)}.muted{color:var(--muted)}"
     // Botones pequeños, integrados en el texto (listado de calendarios, tablas).
     "button.small{padding:2px 12px;font-size:.85rem;font-weight:500;background:var(--mint-soft)}"
@@ -48,6 +44,7 @@ const char* STYLE =
     // Título con un botón al lado y tablas sencillas.
     ".row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:16px}"
     ".row form{margin:0}h3{margin:0;font-size:1rem;color:var(--mint-ink)}"
+    "h4{margin:12px 0 0;font-size:.9rem;color:var(--muted)}"
     "table{width:100%;margin:8px 0;border-collapse:collapse;font-size:.95rem}"
     "th,td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--line)}"
     "th{font-size:.85rem;font-weight:600;color:var(--muted)}"
@@ -57,6 +54,12 @@ const char* STYLE =
     "border:0;border-radius:20px;box-shadow:0 10px 40px rgba(47,61,51,.25)}"
     "dialog::backdrop{background:rgba(47,61,51,.35)}dialog h3{margin-top:16px}"
     ".actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}"
+    // Animación de espera: un punto encendido cada vez, de izquierda a derecha.
+    ".dots{display:inline-flex;gap:8px;margin-left:8px;vertical-align:middle}"
+    ".dots span{width:7px;height:7px;border-radius:50%;background:var(--line);animation:dot 1.25s infinite}"
+    ".dots span:nth-child(2){animation-delay:.25s}.dots span:nth-child(3){animation-delay:.5s}"
+    ".dots span:nth-child(4){animation-delay:.75s}.dots span:nth-child(5){animation-delay:1s}"
+    "@keyframes dot{0%,19%{background:var(--mint-ink);transform:scale(1.3)}20%,100%{background:var(--line)}}"
     "</style>";
 
 String pageStart() {
@@ -134,6 +137,25 @@ String htmlEscape(const String& text) {
 
 String page(const String& body) {
   return pageStart() + card(body) + pageEnd();
+}
+
+String dialogForm(const String& id, const String& title, const char* action, const String& fields,
+                  const char* submitLabel) {
+  return "<dialog id=\"" + id + "\"><h2>" + title + "</h2>"
+         "<form method=\"POST\" action=\"" + action + "\">" + fields +
+         "<div class=\"actions\">"
+         "<button type=\"button\" class=\"ghost\" onclick=\"this.form.reset();this.closest('dialog').close()\">Cancelar</button>"
+         "<button type=\"submit\">" + submitLabel + "</button>"
+         "</div></form></dialog>";
+}
+
+String openDialogButton(const String& id, const String& label, const char* cssClass) {
+  return "<button type=\"button\" class=\"" + String(cssClass) + "\" onclick=\"document.getElementById('" + id +
+         "').showModal()\">" + label + "</button>";
+}
+
+String waitingDots() {
+  return "<span class=\"dots\"><span></span><span></span><span></span><span></span><span></span></span>";
 }
 
 void redirectHome(const char* anchor) {
