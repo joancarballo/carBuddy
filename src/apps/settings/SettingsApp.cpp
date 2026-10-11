@@ -13,7 +13,7 @@ void SettingsApp::draw() {
   int y = showAp ? 9 : 16;
 
   if (showAp) {
-    String instructions = String("AP: Conectate al wifi llamado ") + Net::AP_SSID + " para configurar.";
+    String instructions = String("Conectate al wifi ") + Net::AP_SSID + " para configurar.";
     int lines = Display::textWrapped(0, y, Display::WIDTH, lineHeight, instructions);
     y += lines * lineHeight;
   }
@@ -28,7 +28,7 @@ void SettingsApp::draw() {
 
   // Conectada se puede usar el nombre local; en modo configuración, la IP.
   String address = Net::isConnected() ? Net::hostName() : (ip.length() > 0 ? ip : String("-"));
-  Display::text(0, y, ("URL/IP: " + address).c_str());
+  Display::text(0, y, ("URL: " + address).c_str());
 }
 
 String SettingsApp::webSection() {

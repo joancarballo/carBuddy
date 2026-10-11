@@ -15,11 +15,18 @@ constexpr const char* AP_SSID = "carBuddy-setup";
 // Nombre en la red local: http://carbuddy.local
 constexpr const char* MDNS_NAME = "carbuddy";
 
+// Función que se llama a menudo mientras se espera a la Wi-Fi en begin(),
+// para poder animar la pantalla (begin() no vuelve hasta conectar o rendirse).
+void setWaitCallback(void (*callback)());
+
 // Conecta a la Wi-Fi guardada (hasta 15 s) o crea la red de configuración.
 // Arranca el servidor web.
 void begin();
 
-// Atiende las peticiones web. Llamar en cada vuelta del loop().
+// Atiende las peticiones web y vigila la Wi-Fi. Llamar en cada vuelta del loop().
+// Si la Wi-Fi guardada no está conectada durante 2 minutos, crea la red de
+// configuración; mientras existe, reintenta la Wi-Fi cada 30 s (si nadie está
+// conectado a esa red) y la apaga en cuanto vuelve.
 void loop();
 
 // Servidor web, para que cada app registre sus propias rutas.
@@ -34,6 +41,10 @@ bool isApMode();
 // true si está conectada como cliente a una Wi-Fi.
 bool isConnected();
 
+// true si se ha perdido la Wi-Fi guardada y la placa está intentando recuperarla
+// durante los 2 minutos previos a crear la red de configuración.
+bool isReconnecting();
+
 // Nombre de la Wi-Fi guardada ("" si no hay ninguna).
 String ssid();
 
@@ -43,6 +54,9 @@ String ip();
 
 // Nombre en la red local, "carbuddy.local".
 String hostName();
+
+// Escapa &, <, > y " para poder meter un texto dentro del HTML.
+String htmlEscape(const String& text);
 
 // Estado de la Wi-Fi y botón para editarla, en HTML.
 String wifiSectionHtml();
