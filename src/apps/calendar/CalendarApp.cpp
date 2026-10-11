@@ -1,5 +1,7 @@
 #include "apps/calendar/CalendarApp.h"
 
+#include <ctype.h>
+
 #include "core/Display.h"
 #include "net/Net.h"
 #include "services/TimeService.h"
@@ -20,6 +22,19 @@ const char* const SHORT_DAYS[] = {"Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "S�
 
 // Cabecera (y = 1..8) y 5 filas de 10 píxeles: 12..21, 22..31, 32..41, 42..51 y 52..61.
 static_assert(LIST_TOP + VISIBLE_ROWS * ROW_HEIGHT <= Display::HEIGHT, "las 5 filas tienen que caber");
+
+// Evento especial: si es hoy, no va en la lista y se indica con 👧 en la
+// cabecera; si es mañana, va el primero de mañana. Basta con que el título
+// contenga el texto, sin distinguir mayúsculas (puede llevar emojis alrededor).
+const char* LAIA_TEXT = "laia en joan";
+
+bool isLaiaEvent(const CalendarEvent& e) {
+  std::string title = e.title;
+  for (size_t i = 0; i < title.size(); i++) {
+    title[i] = (char)tolower((unsigned char)title[i]);
+  }
+  return title.find(LAIA_TEXT) != std::string::npos;
+}
 
 // Mensaje que se muestra mientras todavía no hay ningún evento descargado.
 void addStatusNotices(std::vector<String>& out) {
@@ -60,11 +75,13 @@ void CalendarApp::refreshData(int64_t today) {
     return;
   }
 
-  // Evento seleccionado, para volver a seleccionarlo en la lista nueva.
+  // Fila seleccionada, para volver a seleccionarla en la lista nueva.
   const bool keep = isSelectable(selected_);
+  const RowType keepType = keep ? rows_[selected_].type : RowType::Notice;
+  const String keepText = keep ? rows_[selected_].text : String();
   std::string keepTitle;
   Minutes keepStart = 0;
-  if (keep) {
+  if (keep && keepType == RowType::Event) {
     keepTitle = events_[rows_[selected_].eventIndex].title;
     keepStart = events_[rows_[selected_].eventIndex].start;
   }
@@ -77,8 +94,11 @@ void CalendarApp::refreshData(int64_t today) {
 
   selected_ = -1;
   for (size_t i = 0; keep && i < rows_.size(); i++) {
-    if (rows_[i].type == RowType::Event && events_[rows_[i].eventIndex].title == keepTitle &&
-        events_[rows_[i].eventIndex].start == keepStart) {
+    const bool sameEvent = keepType == RowType::Event && rows_[i].type == RowType::Event &&
+                           events_[rows_[i].eventIndex].title == keepTitle &&
+                           events_[rows_[i].eventIndex].start == keepStart;
+    const bool sameEmpty = keepType == RowType::Empty && rows_[i].type == RowType::Empty && rows_[i].text == keepText;
+    if (sameEvent || sameEmpty) {
       selected_ = i;
       keepSelectionVisible();
       break;
@@ -89,6 +109,7 @@ void CalendarApp::refreshData(int64_t today) {
 void CalendarApp::buildRows(int64_t today) {
   rows_.clear();
   rowsDay_ = today;
+  laiaToday_ = false;
 
   if (events_.empty() && CalendarService::status().lastOk == 0) {
     std::vector<String> notices;
@@ -106,12 +127,22 @@ void CalendarApp::buildRows(int64_t today) {
     }
     const size_t before = rows_.size();
     for (size_t i = 0; i < events_.size(); i++) {
-      if (events_[i].day == today + d) {
-        rows_.push_back(Row{RowType::Event, (int)i, String()});
+      if (events_[i].day != today + d) {
+        continue;
       }
+      if (isLaiaEvent(events_[i])) {
+        if (d == 0) {
+          laiaToday_ = true;  // hoy no va en la lista: se indica con 👧 en la cabecera
+          continue;
+        }
+        // Mañana va siempre el primero, justo debajo del separador.
+        rows_.insert(rows_.begin() + before, Row{RowType::Event, (int)i, String()});
+        continue;
+      }
+      rows_.push_back(Row{RowType::Event, (int)i, String()});
     }
     if (rows_.size() == before) {
-      rows_.push_back(Row{RowType::Notice, -1, d == 0 ? "Hoy no hay eventos" : "Sin eventos"});
+      rows_.push_back(Row{RowType::Empty, -1, d == 0 ? "Hoy no hay eventos" : "Sin eventos"});
     }
   }
 }
@@ -140,8 +171,11 @@ int CalendarApp::firstUpcomingRow(Minutes now) const {
   return 0;
 }
 
+// Se pueden seleccionar los eventos y las filas "sin eventos"; el separador
+// "Mañana" y los avisos de estado, no.
 bool CalendarApp::isSelectable(int row) const {
-  return row >= 0 && row < (int)rows_.size() && rows_[row].type == RowType::Event;
+  return row >= 0 && row < (int)rows_.size() &&
+         (rows_[row].type == RowType::Event || rows_[row].type == RowType::Empty);
 }
 
 void CalendarApp::moveSelection(int step) {
@@ -205,6 +239,9 @@ void CalendarApp::drawHeader(const struct tm& t) {
   snprintf(header, sizeof(header), "%s %02d/%02d/%02d  %02d:%02d", SHORT_DAYS[t.tm_wday], t.tm_mday,
            t.tm_mon + 1, (t.tm_year + 1900) % 100, t.tm_hour, t.tm_min);
   Display::textCentered(8, header);
+  if (laiaToday_) {
+    Display::text(0, 8, "\U0001F467");  // 👧
+  }
 }
 
 void CalendarApp::drawRow(int row, int topY, Minutes now) {
@@ -223,19 +260,19 @@ void CalendarApp::drawRow(int row, int topY, Minutes now) {
     return;
   }
 
-  if (r.type == RowType::Notice) {
+  // La fila seleccionada lleva el fondo encendido y el texto en negro.
+  if (row == selected_) {
+    g.drawBox(0, topY, CONTENT_WIDTH, ROW_HEIGHT);
+    g.setDrawColor(0);
+  }
+
+  if (r.type == RowType::Notice || r.type == RowType::Empty) {
     Display::text(1, baseline, Display::fit(r.text, CONTENT_WIDTH - 1));
+    g.setDrawColor(1);
     return;
   }
 
   const CalendarEvent& e = events_[r.eventIndex];
-
-  // El evento seleccionado lleva el fondo encendido y el texto en negro.
-  const bool isSelected = (row == selected_);
-  if (isSelected) {
-    g.drawBox(0, topY, CONTENT_WIDTH, ROW_HEIGHT);
-    g.setDrawColor(0);
-  }
 
   // Los eventos de todo el día solo llevan el título, que ocupa toda la fila.
   if (e.allDay) {
@@ -346,7 +383,7 @@ bool CalendarApp::handleInput(InputEvent ev) {
       return true;
     case InputEvent::DialPress: {
       struct tm t;
-      if (isSelectable(selected_) && TimeService::now(t)) {
+      if (isSelectable(selected_) && rows_[selected_].type == RowType::Event && TimeService::now(t)) {
         openDetail(events_[rows_[selected_].eventIndex], CivilTime::dayOf(CivilTime::fromTm(t)));
       }
       return true;

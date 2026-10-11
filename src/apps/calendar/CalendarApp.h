@@ -33,7 +33,9 @@ class CalendarApp : public App {
  private:
   static const uint32_t DETAIL_TIMEOUT_MS = 30000;  // el detalle se cierra solo
 
-  enum class RowType { Event, Separator, Notice };
+  // Event: un evento. Empty: "Hoy no hay eventos" o "Sin eventos" (se puede
+  // seleccionar). Separator: la línea "Mañana". Notice: avisos de estado.
+  enum class RowType { Event, Empty, Separator, Notice };
 
   struct Row {
     RowType type;
@@ -60,6 +62,7 @@ class CalendarApp : public App {
   std::vector<CalendarEvent> events_;
   uint32_t dataVersion_ = 0xFFFFFFFF;  // versión de la lista que se tiene copiada
   int64_t rowsDay_ = -1;               // día para el que se construyeron las filas
+  bool laiaToday_ = false;             // hoy hay un evento "Laia en Joan" (👧 en la cabecera)
 
   std::vector<Row> rows_;
   int top_ = 0;        // primera fila visible
